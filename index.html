@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#2c3e50">
     <meta name="apple-mobile-web-app-title" content="Skolapp">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <link rel="manifest" href="./manifest.json">
     <title>Björklunds Skolapp</title>
 
@@ -934,6 +936,22 @@
     "mobile": ""
   }
 ]</pre>
+            </div>
+
+            <h4 style="margin-top:18px;">Installera som app (iOS)</h4>
+            <div style="font-size:0.8rem; color: var(--muted-text); margin-top:6px; margin-bottom:10px;">
+                iOS visar ofta ingen automatisk “installera”-prompt från PWA-kod. Gör så här istället:
+            </div>
+            <div style="font-size:0.85rem; color: var(--text); line-height:1.5; margin-bottom:12px;">
+                1. Öppna appen i Safari på iPhone.<br>
+                2. Tryck på <b>Dela</b>-ikonen (fyrkant med pil).<br>
+                3. Välj <b>Lägg till på hemskärmen</b>.<br>
+                4. Bekräfta. Ikonen dyker upp på startskärmen.
+            </div>
+
+            <h4 style="margin-top:14px;">Installera som app (Android)</h4>
+            <div style="font-size:0.85rem; color: var(--muted-text); line-height:1.5; margin-top:6px; margin-bottom:10px;">
+                På Android/Chrome får du ofta en install-prompt när du är online. Om den inte dyker upp direkt kan du trycka på webbläsarens meny och välja “Installera app” eller ladda om sidan och vänta en stund.
             </div>
 
             <button type="button" onclick="closeSettingsHelp()" class="settings-close-btn">
@@ -2828,6 +2846,98 @@
 
     registerServiceWorker();
     initApp();
+
+    // PWA install prompt (Android/Chrome).
+    // iOS kan oftast inte trigga samma prompt automatiskt; där krävs "Lägg till på hemskärmen".
+    (function initInstallPrompt() {
+        let deferredPrompt = null;
+
+        function ensureToast() {
+            let el = document.getElementById("install-toast");
+            if (el) return el;
+
+            el = document.createElement("div");
+            el.id = "install-toast";
+            el.style.position = "fixed";
+            el.style.left = "12px";
+            el.style.right = "12px";
+            el.style.bottom = "12px";
+            el.style.zIndex = "2000";
+            el.style.padding = "12px";
+            el.style.borderRadius = "12px";
+            el.style.background = "rgba(0,0,0,0.75)";
+            el.style.color = "#fff";
+            el.style.display = "none";
+            el.style.textAlign = "center";
+
+            el.innerHTML = `
+                <div style="font-weight:700; margin-bottom:8px;">Installera appen?</div>
+                <div style="display:flex; gap:10px; justify-content:center;">
+                    <button id="install-toast-install" type="button"
+                        style="padding:10px 14px; border-radius:10px; border:none; cursor:pointer; font-weight:700;">
+                        Installera
+                    </button>
+                    <button id="install-toast-close" type="button"
+                        style="padding:10px 14px; border-radius:10px; border:1px solid rgba(255,255,255,0.35); cursor:pointer; font-weight:700; background:transparent; color:#fff;">
+                        Inte nu
+                    </button>
+                </div>
+            `;
+
+            document.body.appendChild(el);
+
+            const installBtn = document.getElementById("install-toast-install");
+            if (installBtn) {
+                installBtn.style.background = "#27ae60";
+                installBtn.addEventListener("click", async () => {
+                    try {
+                        if (!deferredPrompt) return;
+                        deferredPrompt.prompt();
+                        const choice = await deferredPrompt.userChoice;
+                        deferredPrompt = null;
+                        if (choice && choice.outcome) {
+                            // hide on outcome
+                        }
+                        hideToast();
+                    } catch (e) {
+                        hideToast();
+                    }
+                });
+            }
+
+            const closeBtn = document.getElementById("install-toast-close");
+            if (closeBtn) {
+                closeBtn.addEventListener("click", () => {
+                    deferredPrompt = null;
+                    hideToast();
+                });
+            }
+
+            return el;
+        }
+
+        function showToast() {
+            const el = ensureToast();
+            if (el) el.style.display = "block";
+        }
+
+        function hideToast() {
+            const el = document.getElementById("install-toast");
+            if (el) el.style.display = "none";
+        }
+
+        window.addEventListener("beforeinstallprompt", (e) => {
+            // Prevent the browser from showing its own UI.
+            e.preventDefault();
+            deferredPrompt = e;
+            showToast();
+        });
+
+        window.addEventListener("appinstalled", () => {
+            deferredPrompt = null;
+            hideToast();
+        });
+    })();
 
     (function initThemePicker() {
         const sel = document.getElementById("theme-select");
