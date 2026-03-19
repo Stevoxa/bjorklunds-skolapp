@@ -25,6 +25,8 @@
             --overlay-bg: #ffffff;
             --settings-section-bg: #f9f9f9;
             --btn-secondary-bg: #f5f5f5;
+            /* Extra padding för bottenmeny när Android-systemnavigeringen täcker innehåll. */
+            --controls-bottom-pad: 0px;
         }
 
         [data-theme="dark"] {
@@ -349,7 +351,7 @@
         }
 
         .controls {
-            padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
+            padding: 10px 10px calc(10px + env(safe-area-inset-bottom) + var(--controls-bottom-pad));
             text-align: center;
             display: flex;
             justify-content: center;
@@ -2937,6 +2939,30 @@
             deferredPrompt = null;
             hideToast();
         });
+    })();
+
+    // Ensure bottom controls stay above Android navigation bar/gestures.
+    // We compute the visual viewport "loss" and add it as extra padding.
+    (function initBottomControlsPadding() {
+        function update() {
+            try {
+                if (!window.visualViewport) return;
+                const vv = window.visualViewport;
+                const diff = Math.max(0, window.innerHeight - vv.height);
+                // Cap so we don't create huge gaps on unusual layouts.
+                const padPx = Math.min(diff, 60);
+                document.documentElement.style.setProperty("--controls-bottom-pad", padPx + "px");
+            } catch {
+                // ignore
+            }
+        }
+
+        update();
+        if (window.visualViewport && window.visualViewport.addEventListener) {
+            window.visualViewport.addEventListener("resize", update);
+        }
+        window.addEventListener("resize", update);
+        window.addEventListener("orientationchange", update);
     })();
 
     (function initThemePicker() {
