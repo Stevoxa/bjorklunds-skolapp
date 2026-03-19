@@ -742,9 +742,11 @@
 
 <script>
     const APP_VERSION = "v51";
-    const STORAGE_KEY = `bjorklunds_${APP_VERSION}`;
-    const FOOD_CACHE_KEY = "food_cache";
-    const THEME_STORAGE_KEY = "bjorklunds_theme";
+    // Use sessionStorage so we don't persist user/app state across browser restarts.
+    const STORAGE_KEY = `bjorklunds_session_${APP_VERSION}`;
+    const FOOD_CACHE_KEY = "food_cache_session";
+    const THEME_STORAGE_KEY = "bjorklunds_theme_session";
+    const storage = sessionStorage;
     const DEFAULT_CHILDREN = [
         { name: "Elev A", file: "schema_elev_a.json", rss: "https://example.com/rss/week/elev-a?locale=sv" },
         { name: "Elev B", file: "schema_elev_b.json", rss: "https://example.com/rss/week/elev-b?locale=sv" }
@@ -935,8 +937,35 @@
         };
     }
 
+    // Remove legacy persisted keys (old app versions).
+    // This ensures "old" localStorage entries don't keep showing up.
+    function purgeLegacyLocalStorage() {
+        try {
+            const legacyExactKeys = [
+                "bjorklund-skolapp-store-1",
+                "bjorklunds_theme",
+                "food_cache"
+            ];
+
+            for (const k of legacyExactKeys) {
+                try { localStorage.removeItem(k); } catch { /* ignore */ }
+            }
+
+            // Older schema/terms/lov used bjorklunds_*.
+            for (let i = localStorage.length - 1; i >= 0; i--) {
+                const key = localStorage.key(i);
+                if (!key) continue;
+                if (key.startsWith("bjorklunds_")) {
+                    try { localStorage.removeItem(key); } catch { /* ignore */ }
+                }
+            }
+        } catch {
+            // ignore
+        }
+    }
+
     function getThemePreference() {
-        return localStorage.getItem(THEME_STORAGE_KEY) || "system";
+        return storage.getItem(THEME_STORAGE_KEY) || "system";
     }
 
     function applyTheme(preference) {
@@ -1019,23 +1048,11 @@
 
     async function initApp() {
         applyTheme(getThemePreference());
-        // Clean up stale localStorage entries from previous app versions.
-        // This prevents schema/terms/lov changes from appearing "stuck" on some devices.
-        try {
-            for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                if (!key) continue;
-                if (key.startsWith("bjorklunds_") && key !== STORAGE_KEY) {
-                    localStorage.removeItem(key);
-                }
-            }
-        } catch {
-            // ignore
-        }
+        purgeLegacyLocalStorage();
         skipWeekend(activeDate, 1);
 
         let loadedFromStorage = false;
-        const saved = localStorage.getItem(STORAGE_KEY);
+        const saved = storage.getItem(STORAGE_KEY);
 
         if (saved) {
             try {
@@ -1046,14 +1063,14 @@
                 }
             } catch (e) {
                 console.warn("Kunde inte läsa sparad appdata. Hämtar om från filer.", e);
-                localStorage.removeItem(STORAGE_KEY);
+                storage.removeItem(STORAGE_KEY);
             }
         }
 
         if (!loadedFromStorage) {
             try {
                 appState = await loadRemoteAppState();
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+                storage.setItem(STORAGE_KEY, JSON.stringify(appState));
             } catch (e) {
                 console.error("Initiering misslyckades:", e);
                 appState = getDefaultAppState();
@@ -1354,11 +1371,11 @@
 
         let cache = {};
         try {
-            cache = JSON.parse(localStorage.getItem(FOOD_CACHE_KEY) || "{}");
+            cache = JSON.parse(storage.getItem(FOOD_CACHE_KEY) || "{}");
         } catch (e) {
             console.warn("Mat-cache kunde inte läsas. Återställer cache.", e);
             cache = {};
-            localStorage.removeItem(FOOD_CACHE_KEY);
+            storage.removeItem(FOOD_CACHE_KEY);
         }
 
         if (cache[url] && cache[url].date === today && cache[url].xml) {
@@ -1378,7 +1395,7 @@
             }
 
             cache[url] = { date: today, xml: xmlText };
-            localStorage.setItem(FOOD_CACHE_KEY, JSON.stringify(cache));
+            storage.setItem(FOOD_CACHE_KEY, JSON.stringify(cache));
             displayFood(xmlText, id, day, false);
         } catch (e) {
             console.warn("Kunde inte hämta mat:", e);
@@ -1499,7 +1516,7 @@
         const weekdays = ["Måndag", "Tisdag", "Onsdag", "Torsdag", "Fredag"];
         let cache = {};
         try {
-            cache = JSON.parse(localStorage.getItem(FOOD_CACHE_KEY) || "{}");
+            cache = JSON.parse(storage.getItem(FOOD_CACHE_KEY) || "{}");
         } catch {
             cache = {};
         }
@@ -1512,7 +1529,7 @@
                 const xmlText = await res.text();
                 if (!xmlText || !xmlText.includes("<rss")) throw new Error("Ogiltigt svar");
                 cache[child.rss] = { date: now.toLocaleDateString("sv-SE"), xml: xmlText };
-                localStorage.setItem(FOOD_CACHE_KEY, JSON.stringify(cache));
+                storage.setItem(FOOD_CACHE_KEY, JSON.stringify(cache));
                 return xmlText;
             } catch (e) {
                 console.warn("Kunde inte hämta matsedel:", e);
@@ -2042,7 +2059,7 @@
                 if (rssEl) c.rss = rssEl.value.trim();
             });
 
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+            storage.setItem(STORAGE_KEY, JSON.stringify(appState));
             location.reload();
         } catch (e) {
             alert("Kunde inte spara: " + e.message);
@@ -2051,7 +2068,7 @@
 
     function clearFoodCache() {
         if (confirm("Rensa mat-cache?")) {
-            localStorage.removeItem(FOOD_CACHE_KEY);
+            storage.removeItem(FOOD_CACHE_KEY);
             location.reload();
         }
     }
@@ -2075,7 +2092,7 @@
         if (sel) {
             sel.addEventListener("change", function () {
                 const v = this.value;
-                localStorage.setItem(THEME_STORAGE_KEY, v);
+                storage.setItem(THEME_STORAGE_KEY, v);
                 applyTheme(v);
             });
         }
