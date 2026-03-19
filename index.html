@@ -467,6 +467,37 @@
             color: var(--text);
         }
 
+        .help-code-wrap {
+            position: relative;
+        }
+
+        .help-copy-btn {
+            position: absolute;
+            top: 8px;
+            right: 10px;
+            padding: 4px 6px;
+            border-radius: 6px;
+            border: 1px solid var(--muted-border);
+            background: rgba(255, 255, 255, 0.75);
+            color: var(--muted-text);
+            cursor: pointer;
+            opacity: 0.8;
+        }
+
+        [data-theme="dark"] .help-copy-btn {
+            background: rgba(37, 40, 44, 0.75);
+        }
+
+        .help-code-wrap:hover .help-copy-btn {
+            opacity: 1;
+        }
+
+        .help-copy-btn svg {
+            width: 14px;
+            height: 14px;
+            display: block;
+        }
+
         .hidden {
             display: none;
         }
@@ -673,7 +704,13 @@
             </p>
 
             <h4>1) Barnets schema (t.ex. <code>schema_mikaela.json</code>)</h4>
-            <pre class="help-code">{ 
+            <div class="help-code-wrap">
+                <button type="button" class="help-copy-btn" onclick="copyHelpCode(this)" aria-label="Kopiera kod" title="Kopiera kod">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm5 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h13c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h13v14z"/>
+                    </svg>
+                </button>
+                <pre class="help-code">{ 
   "elev": "Elev A (exempel)",
   "schema": [
     {
@@ -684,9 +721,16 @@
     }
   ]
 }</pre>
+            </div>
 
             <h4 style="margin-top:14px;">2) Lov & helgdagar (t.ex. <code>lov_helg.json</code>)</h4>
-            <pre class="help-code">{
+            <div class="help-code-wrap">
+                <button type="button" class="help-copy-btn" onclick="copyHelpCode(this)" aria-label="Kopiera kod" title="Kopiera kod">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm5 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h13c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h13v14z"/>
+                    </svg>
+                </button>
+                <pre class="help-code">{
   "lov": [
     { "datum": "2026-02-23", "vecka": 9, "dag": "Måndag", "beskrivning": "Exempel-lov" }
   ],
@@ -694,22 +738,36 @@
     { "datum": "2026-04-03", "vecka": 14, "dag": "Fredag", "beskrivning": "Exempelhelgdag" }
   ]
 }</pre>
+            </div>
 
             <h4 style="margin-top:14px;">3) Terminer (t.ex. <code>termin.json</code>)</h4>
-            <pre class="help-code">[
+            <div class="help-code-wrap">
+                <button type="button" class="help-copy-btn" onclick="copyHelpCode(this)" aria-label="Kopiera kod" title="Kopiera kod">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm5 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h13c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h13v14z"/>
+                    </svg>
+                </button>
+                <pre class="help-code">[
   {
     "termin": "Vårterminen 2026 (exempel)",
     "skolstart": [{ "datum": "2026-01-12", "beskrivning": "Exempel: vårterminens första skoldag" }],
     "skolavslutning": [{ "datum": "2026-06-11", "beskrivning": "Exempel: vårterminens sista skoldag" }]
   }
 ]</pre>
+            </div>
 
             <h4 style="margin-top:14px;">4) Paket (t.ex. <code>skolapp-bundle.json</code>)</h4>
             <div style="font-size:0.75rem; color: var(--muted-text); margin-top:6px; margin-bottom:8px;">
                 Exemplet nedan är <b>annoterat</b> (med kommentarer). <b>Importen kräver giltig JSON utan kommentarerna</b>
                 (dvs ta bort `// ...` rader innan import). Använd gärna knappen nedan för att ladda ner en importbar mall.
             </div>
-            <pre class="help-code">{
+            <div class="help-code-wrap">
+                <button type="button" class="help-copy-btn" onclick="copyHelpCode(this)" aria-label="Kopiera kod" title="Kopiera kod">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm5 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h13c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h13v14z"/>
+                    </svg>
+                </button>
+                <pre class="help-code">{
   "bundleVersion": 1,                // paketversion (metadata)
   "appVersion": "v51",             // metadata (matchar din appversion)
 
@@ -767,6 +825,7 @@
     }
   ]
 }</pre>
+            </div>
 
             <button type="button" onclick="downloadEmptyBundleTemplate()" class="settings-btn" style="margin-top:12px;">
                 Ladda ner tomt paket (skolapp-bundle.json)
@@ -2070,6 +2129,37 @@
         if (form) form.style.display = "";
         if (saveBtn) saveBtn.style.display = "";
         if (closeBtn) closeBtn.style.display = "";
+    }
+
+    async function copyHelpCode(btn) {
+        try {
+            const wrap = btn && btn.closest ? btn.closest(".help-code-wrap") : null;
+            const pre = wrap ? wrap.querySelector("pre.help-code") : null;
+            const text = pre ? pre.innerText : "";
+            if (!text) return;
+
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(text);
+            } else {
+                // Fallback för äldre webbläsare
+                const ta = document.createElement("textarea");
+                ta.value = text;
+                ta.style.position = "fixed";
+                ta.style.left = "-9999px";
+                ta.style.top = "0";
+                document.body.appendChild(ta);
+                ta.focus();
+                ta.select();
+                document.execCommand("copy");
+                document.body.removeChild(ta);
+            }
+
+            const oldTitle = btn.title || "Kopiera kod";
+            btn.title = "Kopierat!";
+            setTimeout(() => { btn.title = oldTitle; }, 1100);
+        } catch (e) {
+            alert("Kunde inte kopiera: " + (e && e.message ? e.message : String(e)));
+        }
     }
 
     function renderSettingsForm() {
