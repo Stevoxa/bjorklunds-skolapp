@@ -606,13 +606,14 @@
         }
 
         .contact-name {
-            font-weight: 800;
-            margin-bottom: 4px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            margin-bottom: 6px;
+            color: var(--text);
         }
 
         .contacts-link {
-            display: inline-block;
-            margin-right: 10px;
+            display: block;
             margin-top: 4px;
             color: var(--primary);
             text-decoration: none;
@@ -2175,7 +2176,7 @@
             ? appState.children[contactsViewChildIndex]
             : null;
 
-        subtitleEl.textContent = activeChild ? `Visa kontakter för ${activeChild.name}` : "";
+        subtitleEl.textContent = "";
 
         const parts = [];
         (Array.isArray(appState.children) ? appState.children : []).forEach((child, idx) => {
