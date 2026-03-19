@@ -556,6 +556,77 @@
             font-style: italic;
         }
 
+        .teacher-name-link {
+            cursor: pointer;
+            color: inherit; /* match lesson text color */
+            text-decoration: none; /* no underline */
+            border: none;
+            background: none;
+            padding: 0;
+            font: inherit;
+            font-style: inherit;
+            appearance: none;
+            -webkit-appearance: none;
+        }
+
+        .teacher-name-link:active {
+            opacity: 0.85;
+        }
+
+        .contacts-child-card {
+            background: var(--card-bg);
+            border-radius: 10px;
+            padding: 12px;
+            margin-bottom: 12px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+            border-left: 4px solid var(--accent);
+        }
+
+        .contacts-child-card.contacts-child-card-active {
+            border-left-color: var(--term);
+        }
+
+        .contacts-child-name {
+            font-weight: 800;
+            color: var(--primary);
+            margin-bottom: 8px;
+        }
+
+        .contacts-empty {
+            color: var(--muted-text);
+            font-size: 0.85rem;
+            margin: 10px 0;
+        }
+
+        .contact-item {
+            padding: 8px 10px;
+            background: var(--muted-bg);
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+
+        .contact-name {
+            font-weight: 800;
+            margin-bottom: 4px;
+        }
+
+        .contacts-link {
+            display: inline-block;
+            margin-right: 10px;
+            margin-top: 4px;
+            color: var(--primary);
+            text-decoration: none;
+            word-break: break-word;
+        }
+
+        .contacts-link:visited {
+            color: var(--primary);
+        }
+
+        .contacts-link:hover {
+            text-decoration: underline;
+        }
+
         .schedule-close-btn {
             background: var(--accent);
             color: #fff;
@@ -667,6 +738,7 @@
 <div class="controls">
     <button type="button" class="controls-btn" onclick="openFoodWeekView()">Matsedel</button>
     <button type="button" class="controls-btn" onclick="openCalendarView()">Lov och ledighet</button>
+    <button type="button" class="controls-btn" onclick="openContactsView()">Kontakt</button>
     <button type="button" class="controls-btn controls-btn-icon" onclick="toggleSettings()" aria-label="Inställningar">⚙</button>
 </div>
 
@@ -790,7 +862,14 @@
             ]
           }
         ]
-      }
+      },
+      "contacts": [
+        {
+          "name": "",
+          "email": "",
+          "mobile": ""
+        }
+      ]
     }
   ],
 
@@ -823,14 +902,6 @@
         { "datum": "2026-06-11", "beskrivning": "Skolavslutning-text" }
       ]
     }
-  ],
-
-  "contacts": [
-    {
-      "name": "",
-      "email": "",
-      "mobile": ""
-    }
   ]
 }</pre>
             </div>
@@ -852,13 +923,14 @@
                 </button>
                 <pre class="help-code">[
   {
-    "name": "asdasda asdasdas",
-    "email": "asdasdsad.asdasd@ekero.se",
-    "mobile": "+46353675478568"
+    "name": "",
+    "email": "",
+    "mobile": ""
   },
   {
     "name": "",
-    "email": ""
+    "email": "",
+    "mobile": ""
   }
 ]</pre>
             </div>
@@ -899,6 +971,15 @@
     <button type="button" class="schedule-close-btn" onclick="closeCalendarView()">Stäng</button>
 </div>
 
+<div id="contacts-view" class="overlay hidden">
+    <div class="schedule-header">
+        <h2 id="contacts-view-title">Skolpersonal</h2>
+        <small id="contacts-view-subtitle"></small>
+    </div>
+    <div id="contacts-view-content"></div>
+    <button type="button" class="schedule-close-btn" onclick="closeContactsView()">Stäng</button>
+</div>
+
 <script>
     const APP_VERSION = "v51";
     // Use localStorage for persistence (like before), but with new key names
@@ -908,8 +989,9 @@
     const THEME_STORAGE_KEY = "bjorklundskolapp_theme";
     const storage = localStorage;
     const DEFAULT_CHILDREN = [
-        { id: "elev_a", name: "Elev A", file: "schema_elev_a.json", rss: "https://example.com/rss/week/elev-a?locale=sv" },
-        { id: "elev_b", name: "Elev B", file: "schema_elev_b.json", rss: "https://example.com/rss/week/elev-b?locale=sv" }
+        // Default: ingen RSS så att appen inte försöker hämta "example" och spammar felmeddelanden.
+        { id: "elev_a", name: "Elev A", file: "schema_elev_a.json", rss: "" },
+        { id: "elev_b", name: "Elev B", file: "schema_elev_b.json", rss: "" }
     ];
 
     let activeDate = new Date();
@@ -918,6 +1000,8 @@
     let visibilityBound = false;
     let scheduleViewOpen = false;
     let scheduleViewChildIndex = null;
+    let contactsViewOpen = false;
+    let contactsViewChildIndex = null;
     let isRestoringFromHistory = false;
 
     const SUBJECT_COLOR_MAP = new Map();
@@ -975,6 +1059,15 @@
         scheduleViewOpen = false;
         scheduleViewChildIndex = null;
 
+        const contactsEl = document.getElementById("contacts-view");
+        if (contactsEl) {
+            contactsEl.classList.add("hidden");
+            contactsEl.style.display = "none";
+        }
+
+        contactsViewOpen = false;
+        contactsViewChildIndex = null;
+
         hideSettingsViewDom();
     }
 
@@ -1003,6 +1096,8 @@
                     openFoodWeekView();
                 } else if (overlay === "calendar") {
                     openCalendarView();
+                } else if (overlay === "contacts") {
+                    openContactsView(st.childIndex);
                 } else if (overlay === "settings") {
                     hideAllOverlaysDom();
                     const view = document.getElementById("settings-view");
@@ -1093,8 +1188,7 @@
         return {
             children: [],
             lov: { lov: [], helgdagar: [] },
-            terms: [],
-            contacts: []
+            terms: []
         };
     }
 
@@ -1118,11 +1212,12 @@
                 id: getChildIdForBundle(c, idx),
                 name: c.name || "",
                 rss: c.rss || "",
-                schema: c.schema
+                schema: c.schema,
+                // kontakter för just detta barn
+                contacts: Array.isArray(c.contacts) ? c.contacts : []
             })),
             lov: appState.lov || { lov: [], helgdagar: [] },
-            terms: Array.isArray(appState.terms) ? appState.terms : [],
-            contacts: Array.isArray(appState.contacts) ? appState.contacts : []
+            terms: Array.isArray(appState.terms) ? appState.terms : []
         };
     }
 
@@ -1150,7 +1245,23 @@
             }
 
             const id = (typeof c.id === "string" && c.id.trim()) ? c.id.trim() : getChildIdForBundle({ name }, idx);
-            return { id, name, rss, schema };
+            // Kontakter per barn (larare_kontakt-format = JSON-array)
+            const contactsRaw = Array.isArray(c.contacts)
+                ? c.contacts
+                : (Array.isArray(bundle.larare_kontakt) && bundle.children.length === 1 ? bundle.larare_kontakt : []);
+
+            const contacts = contactsRaw.map((k, cIdx) => {
+                if (!k || typeof k !== "object") {
+                    throw new Error(`Kontakt #${cIdx + 1} för "${name}" är inte ett objekt.`);
+                }
+                return {
+                    name: String(k.name ?? "").trim(),
+                    email: String(k.email ?? "").trim(),
+                    mobile: String(k.mobile ?? "").trim()
+                };
+            });
+
+            return { id, name, rss, schema, contacts };
         });
 
         const lovIn = bundle.lov || {};
@@ -1159,26 +1270,11 @@
         const lov = { lov: lovList, helgdagar: helgdagarList };
 
         const terms = Array.isArray(bundle.terms) ? bundle.terms : [];
-        const contactsRaw = Array.isArray(bundle.contacts)
-            ? bundle.contacts
-            : (Array.isArray(bundle.larare_kontakt) ? bundle.larare_kontakt : []);
-
-        const contacts = contactsRaw.map((c, idx) => {
-            if (!c || typeof c !== "object") {
-                throw new Error(`Kontakt #${idx + 1} är inte ett objekt.`);
-            }
-            return {
-                name: String(c.name ?? "").trim(),
-                email: String(c.email ?? "").trim(),
-                mobile: String(c.mobile ?? "").trim()
-            };
-        });
 
         return {
             children: normalizedChildren,
             lov,
-            terms,
-            contacts
+            terms
         };
     }
 
@@ -1194,18 +1290,18 @@
                     rss: "",
                     schema: {
                         schema: []
-                    }
+                    },
+                    contacts: [
+                        {
+                            name: "",
+                            email: "",
+                            mobile: ""
+                        }
+                    ]
                 }
             ],
             lov: { lov: [], helgdagar: [] },
-            terms: [],
-            contacts: [
-                {
-                    name: "",
-                    email: "",
-                    mobile: ""
-                }
-            ]
+            terms: []
         };
     }
 
@@ -1240,6 +1336,7 @@
         const calendarView = document.getElementById("calendar-view");
         if (calendarView && calendarView.style.display === "block") renderCalendarView();
         if (scheduleViewOpen) renderScheduleView();
+        if (contactsViewOpen) renderContactsView();
     }
 
     // Remove legacy persisted keys (old app versions).
@@ -1348,11 +1445,11 @@
                 id: child.id,
                 name: child.name,
                 schema: childSchemas[index],
-                rss: child.rss
+                rss: child.rss,
+                contacts: []
             })),
             lov,
-            terms,
-            contacts: []
+            terms
         };
     }
 
@@ -1368,6 +1465,21 @@
             try {
                 const parsed = JSON.parse(saved);
                 if (parsed && typeof parsed === "object") {
+                    // Migration: äldre versioner kunde ha contacts globalt (appState.contacts)
+                    // Vi flyttar då in den i första barnets kontakter och tar bort globala fältet.
+                    if (Array.isArray(parsed.contacts) && Array.isArray(parsed.children) && parsed.children.length > 0) {
+                        if (!Array.isArray(parsed.children[0].contacts)) {
+                            parsed.children[0].contacts = parsed.contacts;
+                        }
+                        parsed.children.forEach((ch) => {
+                            if (!Array.isArray(ch.contacts)) ch.contacts = [];
+                        });
+                        delete parsed.contacts;
+                    } else if (Array.isArray(parsed.children)) {
+                        parsed.children.forEach((ch) => {
+                            if (!Array.isArray(ch.contacts)) ch.contacts = [];
+                        });
+                    }
                     appState = parsed;
                     loadedFromStorage = true;
                 }
@@ -1501,7 +1613,7 @@
             html += `</div>`;
 
             let foodId = null;
-            if (selectedWeekNum === currentWeekNum && !holi && !isSummer) {
+            if (selectedWeekNum === currentWeekNum && !holi && !isSummer && child.rss) {
                 foodId = `food-${idx}`;
                 html += `<div class="food-box" id="${foodId}">Hämtar mat...</div>`;
             }
@@ -1521,7 +1633,7 @@
                 }
             }
 
-            if (foodId) {
+            if (foodId && child.rss) {
                 fetchFood(child.rss, foodId, dayName);
             }
         });
@@ -1676,6 +1788,12 @@
     async function fetchFood(url, id, day) {
         const el = document.getElementById(id);
         if (!el) return;
+
+        if (!url) {
+            // RSS saknas för barnet: visa fallback och undvik proxy-fel.
+            displayFoodError(id, "Meny saknas.");
+            return;
+        }
 
         const today = new Date().toLocaleDateString("sv-SE");
 
@@ -1832,6 +1950,7 @@
         }
 
         const getXmlForChild = async (child) => {
+            if (!child || !child.rss) return null;
             if (cache[child.rss] && cache[child.rss].xml) return cache[child.rss].xml;
             try {
                 const res = await fetch(`https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(child.rss)}`);
@@ -1982,6 +2101,122 @@
         contentEl.innerHTML = parts.join("");
     }
 
+    function normalizePhoneForTel(mobile) {
+        const raw = String(mobile ?? "").trim();
+        if (!raw) return "";
+        let cleaned = raw.replace(/[^\d+]/g, "");
+        if (cleaned.startsWith("+")) {
+            cleaned = "+" + cleaned.slice(1).replace(/[^\d]/g, "");
+        } else {
+            cleaned = cleaned.replace(/[^\d]/g, "");
+        }
+        return cleaned;
+    }
+
+    function openContactsView(childIndex) {
+        if (!isRestoringFromHistory) {
+            try {
+                history.pushState({ overlay: "contacts", childIndex }, "");
+            } catch {
+                // ignore
+            }
+        }
+
+        hideAllOverlaysDom();
+
+        const view = document.getElementById("contacts-view");
+        if (!view) return;
+
+        contactsViewOpen = true;
+        contactsViewChildIndex = childIndex == null ? null : childIndex;
+
+        view.classList.remove("hidden");
+        view.style.display = "block";
+        renderContactsView();
+
+        if (contactsViewChildIndex != null) {
+            setTimeout(() => {
+                const el = document.getElementById(`contacts-child-${contactsViewChildIndex}`);
+                if (el && el.scrollIntoView) {
+                    el.scrollIntoView({ behavior: "smooth", block: "start" });
+                }
+            }, 50);
+        }
+    }
+
+    function closeContactsView() {
+        contactsViewOpen = false;
+        contactsViewChildIndex = null;
+
+        const view = document.getElementById("contacts-view");
+        if (view) {
+            view.classList.add("hidden");
+            view.style.display = "none";
+        }
+
+        try {
+            const st = history && history.state ? history.state : {};
+            if (!isRestoringFromHistory && st.overlay === "contacts") history.back();
+        } catch {
+            // ignore
+        }
+    }
+
+    function renderContactsView() {
+        if (!appState) return;
+        const titleEl = document.getElementById("contacts-view-title");
+        const subtitleEl = document.getElementById("contacts-view-subtitle");
+        const contentEl = document.getElementById("contacts-view-content");
+        if (!titleEl || !subtitleEl || !contentEl) return;
+
+        titleEl.textContent = "Skolpersonal";
+
+        const activeChild = (contactsViewChildIndex != null && appState.children && appState.children[contactsViewChildIndex])
+            ? appState.children[contactsViewChildIndex]
+            : null;
+
+        subtitleEl.textContent = activeChild ? `Visa kontakter för ${activeChild.name}` : "";
+
+        const parts = [];
+        (Array.isArray(appState.children) ? appState.children : []).forEach((child, idx) => {
+            const contacts = Array.isArray(child.contacts) ? child.contacts : [];
+            const isActive = contactsViewChildIndex === idx;
+            const activeClass = isActive ? " contacts-child-card-active" : "";
+
+            const childName = escapeHtml(child.name || `Barn ${idx + 1}`);
+
+            parts.push(
+                `<div class="contacts-child-card${activeClass}" id="contacts-child-${idx}">` +
+                `<div class="contacts-child-name">${childName}</div>` +
+                (contacts.length === 0
+                    ? `<div class="contacts-empty">Saknar kontakter sparade.</div>`
+                    : contacts.map((c) => {
+                        const name = (c && c.name) ? escapeHtml(c.name) : "Okänd";
+                        const email = c && c.email ? String(c.email).trim() : "";
+                        const mobile = c && c.mobile ? String(c.mobile).trim() : "";
+
+                        const emailHtml = email
+                            ? `<a class="contacts-link" href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a>`
+                            : "";
+
+                        const tel = mobile ? normalizePhoneForTel(mobile) : "";
+                        const mobileHtml = tel
+                            ? `<a class="contacts-link" href="tel:${tel}">${escapeHtml(mobile)}</a>`
+                            : "";
+
+                        const links = (emailHtml || mobileHtml)
+                            ? `<div>${emailHtml}${mobileHtml}</div>`
+                            : "";
+
+                        return `<div class="contact-item"><div class="contact-name">${name}</div>${links}</div>`;
+                    }).join(""))
+                + `</div>`
+            );
+        });
+
+        contentEl.innerHTML = parts.join("");
+    }
+
     function openScheduleView(childIndex) {
         if (!appState || !appState.children || !appState.children[childIndex]) return;
         if (!isRestoringFromHistory) {
@@ -2106,7 +2341,11 @@
 
             const infoParts = [];
             if (room) infoParts.push(`Sal: ${room}`);
-            if (teacher) infoParts.push(`Lärare: ${teacher}`);
+            if (teacher) {
+                infoParts.push(
+                    `Lärare: <button type="button" class="teacher-name-link" onclick="openContactsView(${scheduleViewChildIndex})">${teacher}</button>`
+                );
+            }
             const infoLine = infoParts.length ? `<div class="lesson-teacher">${infoParts.join(" · ")}</div>` : "";
 
             fragments.push(
@@ -2466,65 +2705,89 @@
 
         const contactsSection = document.createElement("div");
         contactsSection.className = "settings-section";
-        contactsSection.innerHTML = "<h3>Skolpersonal (kontaktlista)</h3>";
+        contactsSection.innerHTML = "<h3>Skolpersonal (kontaktlista per barn)</h3>";
 
-        const contactsFile = document.createElement("input");
-        contactsFile.type = "file";
-        contactsFile.accept = ".json,application/json";
-        contactsFile.style.display = "none";
-        contactsFile.addEventListener("change", function () {
-            const f = contactsFile.files && contactsFile.files[0];
-            if (!f) return;
-            const r = new FileReader();
-            r.onload = function () {
-                try {
-                    const parsed = JSON.parse(r.result);
-                    if (!Array.isArray(parsed)) {
-                        throw new Error("Kontaktlistan måste vara en JSON-array.");
-                    }
-                    const normalized = parsed.map((c, idx) => {
-                        if (!c || typeof c !== "object") {
-                            throw new Error(`Kontakt #${idx + 1} är inte ett objekt.`);
+        appState.children.forEach((child, i) => {
+            const childContacts = Array.isArray(child.contacts) ? child.contacts : [];
+            const childBlock = document.createElement("div");
+            childBlock.className = "settings-section";
+            childBlock.style.marginTop = "12px";
+
+            const title = document.createElement("h3");
+            title.textContent = child.name || `Barn ${i + 1}`;
+            childBlock.appendChild(title);
+
+            const fileInput = document.createElement("input");
+            fileInput.type = "file";
+            fileInput.accept = ".json,application/json";
+            fileInput.style.display = "none";
+
+            fileInput.addEventListener("change", function () {
+                const f = fileInput.files && fileInput.files[0];
+                if (!f) return;
+                const r = new FileReader();
+                r.onload = function () {
+                    try {
+                        const parsed = JSON.parse(r.result);
+                        if (!Array.isArray(parsed)) {
+                            throw new Error("Kontaktlistan måste vara en JSON-array.");
                         }
-                        return {
-                            name: String(c.name ?? "").trim(),
-                            email: String(c.email ?? "").trim(),
-                            mobile: String(c.mobile ?? "").trim()
-                        };
-                    });
-                    appState.contacts = normalized;
-                    alert("Kontaktlista importerad.");
-                } catch (e) {
-                    alert("Ogiltig JSON: " + e.message);
-                }
+                        const normalized = parsed.map((c, idx) => {
+                            if (!c || typeof c !== "object") {
+                                throw new Error(`Kontakt #${idx + 1} är inte ett objekt.`);
+                            }
+                            return {
+                                name: String(c.name ?? "").trim(),
+                                email: String(c.email ?? "").trim(),
+                                mobile: String(c.mobile ?? "").trim()
+                            };
+                        });
+                        appState.children[i].contacts = normalized;
+                        alert("Kontaktlista importerad för " + (child.name || `barn ${i + 1}`) + ".");
+                    } catch (e) {
+                        alert("Ogiltig JSON: " + e.message);
+                    }
+                };
+                r.readAsText(f);
+            });
+
+            const wrap = document.createElement("div");
+            wrap.className = "settings-import-export";
+
+            const importBtn = document.createElement("button");
+            importBtn.type = "button";
+            importBtn.textContent = "Importera";
+            importBtn.onclick = () => fileInput.click();
+
+            const exportBtn = document.createElement("button");
+            exportBtn.type = "button";
+            exportBtn.textContent = "Exportera";
+            exportBtn.onclick = () => {
+                const blob = new Blob([JSON.stringify(Array.isArray(appState.children[i].contacts) ? appState.children[i].contacts : [], null, 2)], { type: "application/json" });
+                const a = document.createElement("a");
+                a.href = URL.createObjectURL(blob);
+                const idPart = (appState.children[i].id || ("barn_" + (i + 1))).toString().replace(/\s+/g, "_").toLowerCase();
+                a.download = "larare_kontakt_" + idPart + ".json";
+                a.click();
+                URL.revokeObjectURL(a.href);
             };
-            r.readAsText(f);
+
+            wrap.appendChild(importBtn);
+            wrap.appendChild(exportBtn);
+            childBlock.appendChild(fileInput);
+            childBlock.appendChild(wrap);
+
+            // liten meta-rad om antal kontakter
+            const meta = document.createElement("div");
+            meta.style.fontSize = "0.75rem";
+            meta.style.color = "var(--muted-text)";
+            meta.style.marginTop = "8px";
+            meta.textContent = "Antal kontakter: " + childContacts.length;
+            childBlock.appendChild(meta);
+
+            contactsSection.appendChild(childBlock);
         });
 
-        const contactsWrap = document.createElement("div");
-        contactsWrap.className = "settings-import-export";
-
-        const contactsImport = document.createElement("button");
-        contactsImport.type = "button";
-        contactsImport.textContent = "Importera kontakter";
-        contactsImport.onclick = () => contactsFile.click();
-
-        const contactsExport = document.createElement("button");
-        contactsExport.type = "button";
-        contactsExport.textContent = "Exportera kontakter";
-        contactsExport.onclick = () => {
-            const blob = new Blob([JSON.stringify(Array.isArray(appState.contacts) ? appState.contacts : [], null, 2)], { type: "application/json" });
-            const a = document.createElement("a");
-            a.href = URL.createObjectURL(blob);
-            a.download = "larare_kontakt.json";
-            a.click();
-            URL.revokeObjectURL(a.href);
-        };
-
-        contactsWrap.appendChild(contactsImport);
-        contactsWrap.appendChild(contactsExport);
-        contactsSection.appendChild(contactsFile);
-        contactsSection.appendChild(contactsWrap);
         container.appendChild(contactsSection);
     }
 
