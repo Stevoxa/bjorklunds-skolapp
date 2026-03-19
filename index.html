@@ -704,6 +704,31 @@
   }
 ]</pre>
 
+            <h4 style="margin-top:14px;">4) Paket (t.ex. <code>skolapp-bundle.json</code>)</h4>
+            <pre class="help-code">{
+  "bundleVersion": 1,
+  "appVersion": "v51",
+  "children": [
+    {
+      "id": "elev_a",
+      "name": "Elev A",
+      "rss": "",
+      "schema": {
+        "schema": []
+      }
+    }
+  ],
+  "lov": {
+    "lov": [],
+    "helgdagar": []
+  },
+  "terms": []
+}</pre>
+
+            <button type="button" onclick="downloadEmptyBundleTemplate()" class="settings-btn" style="margin-top:12px;">
+                Ladda ner tomt paket (skolapp-bundle.json)
+            </button>
+
             <button type="button" onclick="closeSettingsHelp()" class="settings-close-btn">
                 Stäng
             </button>
@@ -1004,6 +1029,40 @@
             lov,
             terms
         };
+    }
+
+    function getEmptyBundleTemplate() {
+        // Import/validering kräver minst ett barn, därför finns en "tom" skeleton.
+        return {
+            bundleVersion: 1,
+            appVersion: APP_VERSION,
+            children: [
+                {
+                    id: "elev_a",
+                    name: "Elev A",
+                    rss: "",
+                    schema: {
+                        schema: []
+                    }
+                }
+            ],
+            lov: { lov: [], helgdagar: [] },
+            terms: []
+        };
+    }
+
+    function downloadEmptyBundleTemplate() {
+        try {
+            const bundle = getEmptyBundleTemplate();
+            const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = "skolapp-bundle.json";
+            a.click();
+            URL.revokeObjectURL(a.href);
+        } catch (e) {
+            alert("Kunde inte ladda ner mall: " + (e && e.message ? e.message : String(e)));
+        }
     }
 
     function applyImportedBundle(bundle) {
