@@ -823,6 +823,14 @@
         { "datum": "2026-06-11", "beskrivning": "Skolavslutning-text" }
       ]
     }
+  ],
+
+  "contacts": [
+    {
+      "name": "John Doe",
+      "email": "john.doe@ekero.se",
+      "mobile": "+46353675478568"
+    }
   ]
 }</pre>
             </div>
@@ -830,6 +838,30 @@
             <button type="button" onclick="downloadEmptyBundleTemplate()" class="settings-btn" style="margin-top:12px;">
                 Ladda ner tomt paket (skolapp-bundle.json)
             </button>
+
+            <h4 style="margin-top:14px;">5) Kontaktlista (t.ex. <code>larare_kontakt.json</code>)</h4>
+            <div style="font-size:0.75rem; color: var(--muted-text); margin-top:6px; margin-bottom:8px;">
+                Förväntad struktur är en JSON-array med objekt. Fält: <code>name</code> (namn), <code>email</code> (valfritt men rekommenderas),
+                <code>mobile</code> (valfritt).
+            </div>
+            <div class="help-code-wrap">
+                <button type="button" class="help-copy-btn" onclick="copyHelpCode(this)" aria-label="Kopiera kod" title="Kopiera kod">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm5 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h13c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h13v14z"/>
+                    </svg>
+                </button>
+                <pre class="help-code">[
+  {
+    "name": "asdasda asdasdas",
+    "email": "asdasdsad.asdasd@ekero.se",
+    "mobile": "+46353675478568"
+  },
+  {
+    "name": "John Doe",
+    "email": "john.doe@ekero.se"
+  }
+]</pre>
+            </div>
 
             <button type="button" onclick="closeSettingsHelp()" class="settings-close-btn">
                 Stäng
@@ -1061,7 +1093,8 @@
         return {
             children: [],
             lov: { lov: [], helgdagar: [] },
-            terms: []
+            terms: [],
+            contacts: []
         };
     }
 
@@ -1088,7 +1121,8 @@
                 schema: c.schema
             })),
             lov: appState.lov || { lov: [], helgdagar: [] },
-            terms: Array.isArray(appState.terms) ? appState.terms : []
+            terms: Array.isArray(appState.terms) ? appState.terms : [],
+            contacts: Array.isArray(appState.contacts) ? appState.contacts : []
         };
     }
 
@@ -1125,11 +1159,26 @@
         const lov = { lov: lovList, helgdagar: helgdagarList };
 
         const terms = Array.isArray(bundle.terms) ? bundle.terms : [];
+        const contactsRaw = Array.isArray(bundle.contacts)
+            ? bundle.contacts
+            : (Array.isArray(bundle.larare_kontakt) ? bundle.larare_kontakt : []);
+
+        const contacts = contactsRaw.map((c, idx) => {
+            if (!c || typeof c !== "object") {
+                throw new Error(`Kontakt #${idx + 1} är inte ett objekt.`);
+            }
+            return {
+                name: String(c.name ?? "").trim(),
+                email: String(c.email ?? "").trim(),
+                mobile: String(c.mobile ?? "").trim()
+            };
+        });
 
         return {
             children: normalizedChildren,
             lov,
-            terms
+            terms,
+            contacts
         };
     }
 
@@ -1149,7 +1198,14 @@
                 }
             ],
             lov: { lov: [], helgdagar: [] },
-            terms: []
+            terms: [],
+            contacts: [
+                {
+                    name: "",
+                    email: "",
+                    mobile: ""
+                }
+            ]
         };
     }
 
@@ -1295,7 +1351,8 @@
                 rss: child.rss
             })),
             lov,
-            terms
+            terms,
+            contacts: []
         };
     }
 
@@ -2406,6 +2463,69 @@
         termsSection.appendChild(termsFile);
         termsSection.appendChild(termsWrap);
         container.appendChild(termsSection);
+
+        const contactsSection = document.createElement("div");
+        contactsSection.className = "settings-section";
+        contactsSection.innerHTML = "<h3>Skolpersonal (kontaktlista)</h3>";
+
+        const contactsFile = document.createElement("input");
+        contactsFile.type = "file";
+        contactsFile.accept = ".json,application/json";
+        contactsFile.style.display = "none";
+        contactsFile.addEventListener("change", function () {
+            const f = contactsFile.files && contactsFile.files[0];
+            if (!f) return;
+            const r = new FileReader();
+            r.onload = function () {
+                try {
+                    const parsed = JSON.parse(r.result);
+                    if (!Array.isArray(parsed)) {
+                        throw new Error("Kontaktlistan måste vara en JSON-array.");
+                    }
+                    const normalized = parsed.map((c, idx) => {
+                        if (!c || typeof c !== "object") {
+                            throw new Error(`Kontakt #${idx + 1} är inte ett objekt.`);
+                        }
+                        return {
+                            name: String(c.name ?? "").trim(),
+                            email: String(c.email ?? "").trim(),
+                            mobile: String(c.mobile ?? "").trim()
+                        };
+                    });
+                    appState.contacts = normalized;
+                    alert("Kontaktlista importerad.");
+                } catch (e) {
+                    alert("Ogiltig JSON: " + e.message);
+                }
+            };
+            r.readAsText(f);
+        });
+
+        const contactsWrap = document.createElement("div");
+        contactsWrap.className = "settings-import-export";
+
+        const contactsImport = document.createElement("button");
+        contactsImport.type = "button";
+        contactsImport.textContent = "Importera kontakter";
+        contactsImport.onclick = () => contactsFile.click();
+
+        const contactsExport = document.createElement("button");
+        contactsExport.type = "button";
+        contactsExport.textContent = "Exportera kontakter";
+        contactsExport.onclick = () => {
+            const blob = new Blob([JSON.stringify(Array.isArray(appState.contacts) ? appState.contacts : [], null, 2)], { type: "application/json" });
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = "larare_kontakt.json";
+            a.click();
+            URL.revokeObjectURL(a.href);
+        };
+
+        contactsWrap.appendChild(contactsImport);
+        contactsWrap.appendChild(contactsExport);
+        contactsSection.appendChild(contactsFile);
+        contactsSection.appendChild(contactsWrap);
+        container.appendChild(contactsSection);
     }
 
     function saveSettings() {
