@@ -1,0 +1,53 @@
+{
+  "elev": "Elev A (exempel)",
+  "schema": [
+    {
+      "dag": "Måndag",
+      "lektioner": [
+        { "tid": "09.00-10.00", "ämne": "Matematik (Sal A1)", "lärare": "Lärare Exempel 1" },
+        { "tid": "10.10-10.55", "ämne": "Svenska (Sal B2)", "lärare": "Lärare Exempel 2" },
+        { "tid": "11.05-12.00", "ämne": "Idrott och hälsa", "lärare": "Lärare Exempel 3" },
+        { "tid": "13.15-14.00", "ämne": "Engelska (Sal C3)", "lärare": "Lärare Exempel 4" }
+      ]
+    },
+    {
+      "dag": "Tisdag",
+      "lektioner": [
+        { "tid": "08.30-09.30", "ämne": "Samhällsorienterande ämnen (Sal A1)", "lärare": "Lärare Exempel 5" },
+        { "tid": "09.35-10.30", "ämne": "Matematik (Sal A1)", "lärare": "Lärare Exempel 1" },
+        { "tid": "10.45-11.25", "ämne": "Spanska (Sal D4)", "lärare": "Lärare Exempel 6" },
+        { "tid": "12.30-13.35", "ämne": "Svenska (Sal B2)", "lärare": "Lärare Exempel 2" }
+      ]
+    },
+    {
+      "dag": "Onsdag",
+      "lektioner": [
+        { "tid": "08.30-09.25", "ämne": "Naturorienterande (Sal F5)", "lärare": "Lärare Exempel 7" },
+        { "tid": "09.30-10.25", "ämne": "Engelska (Sal C3)", "lärare": "Lärare Exempel 4" },
+        { "tid": "11.10-12.25", "ämne": "Idrott och hälsa (Gym)", "lärare": "Lärare Exempel 3" },
+        { "tid": "12.40-13.45", "ämne": "Svenska (Sal B2)", "lärare": "Lärare Exempel 2" },
+        { "tid": "13.50-14.45", "ämne": "Naturorienterande (Sal F5)", "lärare": "Lärare Exempel 7" }
+      ]
+    },
+    {
+      "dag": "Torsdag",
+      "lektioner": [
+        { "tid": "08.35-09.40", "ämne": "Matematik (Sal A1)", "lärare": "Lärare Exempel 1" },
+        { "tid": "09.50-10.45", "ämne": "Engelska (Sal E6)", "lärare": "Lärare Exempel 4" },
+        { "tid": "12.00-13.00", "ämne": "Hem- och konsumentkunskap (Hkk)", "lärare": "Lärare Exempel 8" },
+        { "tid": "13.35-14.25", "ämne": "Naturorienterande ämnen (Sal F5)", "lärare": "Lärare Exempel 7" }
+      ]
+    },
+    {
+      "dag": "Fredag",
+      "lektioner": [
+        { "tid": "09.30-10.25", "ämne": "Naturorienterande ämnen (Sal F5)", "lärare": "Lärare Exempel 7" },
+        { "tid": "10.35-11.20", "ämne": "Samhällsorienterande ämnen (Sal A1)", "lärare": "Lärare Exempel 5" },
+        { "tid": "11.25-12.15", "ämne": "Spanska (Sal D4)", "lärare": "Lärare Exempel 6" },
+        { "tid": "13.15-14.00", "ämne": "Matematik (Sal A1)", "lärare": "Lärare Exempel 1" },
+        { "tid": "14.05-14.45", "ämne": "Svenska (Sal B2)", "lärare": "Lärare Exempel 2" },
+        { "tid": "14.50-16.10", "ämne": "Slöjd (Verkstad)", "lärare": "Lärare Exempel 9" }
+      ]
+    }
+  ]
+}

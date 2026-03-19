@@ -1,0 +1,18 @@
+{
+  "lov": [
+    { "datum": "2026-02-23", "vecka": 9, "dag": "Måndag", "beskrivning": "Exempel-lov" },
+    { "datum": "2026-02-24", "vecka": 9, "dag": "Tisdag", "beskrivning": "Exempel-lov" },
+    { "datum": "2026-02-25", "vecka": 9, "dag": "Onsdag", "beskrivning": "Exempel-lov" },
+    { "datum": "2026-02-26", "vecka": 9, "dag": "Torsdag", "beskrivning": "Exempel-lov" },
+    { "datum": "2026-02-27", "vecka": 9, "dag": "Fredag", "beskrivning": "Exempel-lov" },
+    { "datum": "2026-04-07", "vecka": 15, "dag": "Tisdag", "beskrivning": "Exempel-lov (vår)" },
+    { "datum": "2026-04-08", "vecka": 15, "dag": "Onsdag", "beskrivning": "Exempel-lov (vår)" },
+    { "datum": "2026-04-09", "vecka": 15, "dag": "Torsdag", "beskrivning": "Exempel-lov (vår)" },
+    { "datum": "2026-04-10", "vecka": 15, "dag": "Fredag", "beskrivning": "Exempel-lov (vår)" }
+  ],
+  "helgdagar": [
+    { "datum": "2026-04-03", "vecka": 14, "dag": "Fredag", "beskrivning": "Exempelhelgdag" },
+    { "datum": "2026-04-06", "vecka": 15, "dag": "Måndag", "beskrivning": "Exempelhelgdag" },
+    { "datum": "2026-05-01", "vecka": 18, "dag": "Fredag", "beskrivning": "Exempelhelgdag" }
+  ]
+}

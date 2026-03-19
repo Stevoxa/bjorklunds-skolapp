@@ -1,0 +1,16 @@
+[
+  { "name": "Lärare Exempel 1", "email": "example.teacher1@example.com", "mobile": "+46700000001" },
+  { "name": "Lärare Exempel 2", "email": "example.teacher2@example.com" },
+  { "name": "Lärare Exempel 3", "email": "example.teacher3@example.com" },
+  { "name": "Lärare Exempel 4", "email": "example.teacher4@example.com" },
+  { "name": "Lärare Exempel 5", "email": "example.teacher5@example.com" },
+  { "name": "Lärare Exempel 6", "email": "example.teacher6@example.com" },
+  { "name": "Lärare Exempel 7", "email": "example.teacher7@example.com" },
+  { "name": "Lärare Exempel 8", "email": "example.teacher8@example.com" },
+  { "name": "Lärare Exempel 9", "email": "example.teacher9@example.com" },
+  { "name": "Lärare Exempel 10", "email": "example.teacher10@example.com" },
+  { "name": "Lärare Exempel 11", "email": "example.teacher11@example.com" },
+  { "name": "Lärare Exempel 12", "email": "example.teacher12@example.com" },
+  { "name": "Lärare Exempel 13", "email": "example.teacher13@example.com" }
+]
+

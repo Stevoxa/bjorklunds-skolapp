@@ -1,0 +1,2091 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#2c3e50">
+    <meta name="apple-mobile-web-app-title" content="Skolapp">
+    <link rel="manifest" href="./manifest.json">
+    <title>Björklunds Skolapp</title>
+
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --accent: #27ae60;
+            --bg: #f0f2f5;
+            --card-bg: #ffffff;
+            --text: #333;
+            --holiday: #e74c3c;
+            --term: #3498db;
+            --muted-bg: #f9f9f9;
+            --muted-border: #eee;
+            --muted-text: #999;
+            --overlay-bg: #ffffff;
+            --settings-section-bg: #f9f9f9;
+            --btn-secondary-bg: #f5f5f5;
+        }
+
+        [data-theme="dark"] {
+            --primary: #8b9cb3;
+            --accent: #34d399;
+            --bg: #1a1d21;
+            --card-bg: #25282c;
+            --text: #e4e6eb;
+            --holiday: #f87171;
+            --term: #60a5fa;
+            --muted-bg: #2d3238;
+            --muted-border: #3d4248;
+            --muted-text: #9ca3af;
+            --overlay-bg: #25282c;
+            --settings-section-bg: #2d3238;
+            --btn-secondary-bg: #3d4248;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, system-ui, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            height: 100dvh;
+            overflow: hidden;
+            touch-action: pan-y;
+        }
+
+        header {
+            background: var(--card-bg);
+            color: var(--text);
+            padding: 12px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            flex-shrink: 0;
+            border-bottom: 1px solid var(--muted-border);
+        }
+
+        header h2 {
+            margin: 0;
+            font-size: 1rem;
+            font-weight: 700;
+            text-transform: capitalize;
+            color: var(--primary);
+        }
+
+        header small {
+            font-size: 0.7rem;
+            color: var(--muted-text);
+            display: block;
+            margin-top: 2px;
+        }
+
+        .nav-btn {
+            background: var(--bg);
+            border: 1px solid var(--muted-border);
+            color: var(--primary);
+            padding: 8px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1.1rem;
+            transition: background 0.2s, border-color 0.2s;
+        }
+
+        .nav-btn:active {
+            background: var(--muted-bg);
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 12px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .child-card {
+            background: var(--card-bg);
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+            border-radius: 10px;
+            padding: 12px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+            border-top: 4px solid var(--accent);
+            display: flex;
+            flex-direction: column;
+            flex: 0 0 auto;
+            min-height: 0;
+        }
+
+        @media (orientation: landscape) {
+            main {
+                padding: 10px;
+                gap: 10px;
+            }
+
+            .child-card {
+                max-width: none;
+            }
+        }
+        .child-name {
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: var(--primary);
+            border-bottom: 1px solid #eee;
+            padding-bottom: 4px;
+            flex-shrink: 0;
+        }
+
+        .card-inner {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            overflow: hidden;
+        }
+
+        .time-box {
+            background: #f8f9fa;
+            padding: 6px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            font-size: 0.8rem;
+            text-align: center;
+            color: #666;
+        }
+
+        .ongoing {
+            background: #eef9f1;
+            border: 1px solid #c3e6cb;
+            border-left-width: 4px;
+            padding: 8px 10px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            font-size: 0.85rem;
+            transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .ongoing:active {
+            transform: scale(0.98);
+            background: #e0f3e6;
+        }
+
+        .ongoing-label {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            font-weight: bold;
+            color: var(--accent);
+            display: block;
+        }
+
+        .ongoing-label-muted {
+            color: #6c757d;
+        }
+
+        .ongoing-subject {
+            font-weight: bold;
+            color: #000;
+        }
+
+        .ongoing-teacher {
+            font-size: 0.75rem;
+            color: #666;
+            font-style: italic;
+            display: block;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .ongoing-subject-muted {
+            color: #555;
+        }
+
+        .ongoing.ongoing-empty {
+            background: #e9ecef;
+            border-left: 4px solid #6c757d;
+            border-left-color: #6c757d;
+        }
+
+        .ongoing-empty .ongoing-subject {
+            color: #212529;
+        }
+
+        .msg-box {
+            padding: 15px;
+            text-align: center;
+            font-weight: bold;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+        }
+
+        .past-day .child-card {
+            background: #f5f5f5;
+            border-top-color: #cccccc;
+        }
+
+        .past-day .child-name {
+            color: #666666;
+        }
+
+        .past-day .time-box,
+        .past-day .ongoing,
+        .past-day .food-box,
+        .past-day .msg-box {
+            background: #f1f3f5;
+            border-color: #dddddd;
+            color: #777777;
+        }
+
+        .past-day .food-box {
+            border-left-color: #dddddd;
+        }
+
+        .past-day header h2,
+        .past-day header small {
+            color: #9aa0a6;
+        }
+
+        [data-theme="dark"] .past-day .child-card {
+            background: #23262a;
+            border-top-color: #4b5563;
+        }
+
+        [data-theme="dark"] .past-day .child-name {
+            color: #9ca3af;
+        }
+
+        [data-theme="dark"] .past-day .time-box,
+        [data-theme="dark"] .past-day .ongoing,
+        [data-theme="dark"] .past-day .food-box,
+        [data-theme="dark"] .past-day .msg-box {
+            background: #2d3238;
+            border-color: #4b5563;
+            color: #6b7280;
+        }
+
+        [data-theme="dark"] .past-day .food-box {
+            border-left-color: #4b5563;
+        }
+
+        [data-theme="dark"] .past-day header h2,
+        [data-theme="dark"] .past-day header small {
+            color: #6b7280;
+        }
+
+        .controls-btn {
+            background: var(--card-bg);
+            border: 1px solid var(--muted-border);
+            color: var(--muted-text);
+            padding: 10px 24px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .holiday-msg {
+            color: var(--holiday);
+            background: #fff5f5;
+        }
+
+        .term-msg {
+            color: var(--term);
+            background: #ebf5fb;
+        }
+
+        .food-box {
+            background: #fff9e6;
+            color: #333;
+            padding: 8px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            border-left: 3px solid #f1c40f;
+            margin-top: auto;
+            position: relative;
+            flex-shrink: 0;
+            min-height: 44px;
+            overflow-wrap: break-word;
+        }
+
+        [data-theme="dark"] .food-box {
+            background: var(--muted-bg);
+            color: var(--text);
+            border-left-color: var(--accent);
+        }
+
+        [data-theme="dark"] .food-box b {
+            color: var(--text);
+        }
+
+        [data-theme="dark"] .ongoing .ongoing-subject,
+        [data-theme="dark"] .ongoing .ongoing-teacher {
+            color: var(--text);
+        }
+
+        [data-theme="dark"] .ongoing .ongoing-subject-muted {
+            color: var(--muted-text);
+        }
+
+        [data-theme="dark"] .time-box {
+            background: var(--muted-bg);
+            color: var(--text);
+        }
+
+        .controls {
+            padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
+            text-align: center;
+            display: flex;
+            justify-content: center;
+            background: var(--card-bg);
+            border-top: 1px solid var(--muted-border);
+            flex-shrink: 0;
+        }
+
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--overlay-bg);
+            color: var(--text);
+            z-index: 1000;
+            display: none;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .settings-section {
+            background: var(--settings-section-bg);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border-left: 4px solid var(--muted-border);
+        }
+
+        .settings-section input[type="text"],
+        .settings-section textarea,
+        .settings-section select {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0 10px 0;
+            border: 1px solid var(--muted-border);
+            border-radius: 4px;
+            font: inherit;
+            background: var(--card-bg);
+            color: var(--text);
+        }
+
+        .settings-section textarea {
+            height: 150px;
+            font-family: "Courier New", monospace;
+            font-size: 0.75rem;
+        }
+
+        .settings-btn {
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            width: 100%;
+            cursor: pointer;
+            border: 1px solid var(--muted-border);
+            background: var(--card-bg);
+            color: var(--text);
+        }
+
+        .settings-btn-warn {
+            border-color: #ffcccc;
+            color: #c00;
+        }
+
+        .settings-import-export {
+            display: flex;
+            gap: 8px;
+            margin-top: 6px;
+        }
+
+        .settings-import-export button {
+            flex: 1;
+            padding: 8px;
+            font-size: 0.8rem;
+            border-radius: 6px;
+            border: 1px solid var(--muted-border);
+            background: var(--btn-secondary-bg);
+            color: var(--text);
+            cursor: pointer;
+        }
+
+        .settings-save-btn {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 15px;
+            width: 100%;
+            border-radius: 8px;
+            font-weight: bold;
+            margin-top: 16px;
+            cursor: pointer;
+        }
+
+        .settings-close-btn {
+            width: 100%;
+            border: none;
+            background: none;
+            color: var(--muted-text);
+            margin-top: 12px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        .help-code {
+            white-space: pre;
+            overflow-x: auto;
+            overflow-y: hidden;
+            word-break: normal;
+            font-family: "Courier New", monospace;
+            font-size: 0.75rem;
+            background: var(--btn-secondary-bg);
+            border: 1px solid var(--muted-border);
+            border-radius: 8px;
+            padding: 10px;
+            margin-top: 8px;
+            color: var(--text);
+        }
+
+        .hidden {
+            display: none;
+        }
+       
+        .schedule-header {
+            margin-bottom: 16px;
+        }
+
+        .schedule-header h2 {
+            margin: 0 0 4px 0;
+            font-size: 1.1rem;
+        }
+
+        .schedule-header small {
+            font-size: 0.8rem;
+            color: #666;
+        }
+
+        .schedule-help {
+            font-size: 0.75rem;
+            color: #777;
+            margin-bottom: 10px;
+        }
+
+        .lesson-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .lesson-card {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 8px 10px;
+            border-left: 4px solid var(--accent);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.06);
+        }
+
+        .lesson-time {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #555;
+            margin-bottom: 2px;
+        }
+
+        .lesson-subject {
+            font-size: 0.9rem;
+            font-weight: 700;
+            margin-bottom: 2px;
+        }
+
+        .lesson-teacher {
+            font-size: 0.8rem;
+            color: #666;
+            font-style: italic;
+        }
+
+        .schedule-close-btn {
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            padding: 12px;
+            width: 100%;
+            border-radius: 8px;
+            font-weight: bold;
+            margin-top: 8px;
+            cursor: pointer;
+        }
+
+        .controls {
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .controls-btn-icon {
+            padding: 12px 16px;
+            min-width: 52px;
+            font-size: 1.5rem;
+            border: none; /* gear button: no outer border */
+        }
+
+        .food-week-card,
+        .calendar-event-card {
+            background: var(--card-bg);
+            border-radius: 10px;
+            padding: 12px;
+            margin-bottom: 12px;
+            border-left: 4px solid var(--accent);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+        }
+
+        /* Matsedel ska ha samma gula vänsterkant som startsidans "Mat"-kort */
+        .food-week-card {
+            border-left-color: #f1c40f;
+        }
+
+        [data-theme="dark"] .food-week-card {
+            border-left-color: #f1c40f;
+        }
+
+        .food-week-card h4 {
+            margin: 0 0 8px 0;
+            font-size: 0.95rem;
+            color: var(--primary);
+        }
+
+        .food-week-card .food-day {
+            margin-bottom: 14px;
+        }
+
+        .food-day-title {
+            font-weight: 700;
+            font-size: 0.85rem;
+            margin-bottom: 4px;
+            color: var(--text);
+        }
+
+        .food-day-menu {
+            font-size: 0.85rem;
+            color: var(--text);
+            line-height: 1.4;
+        }
+
+        .calendar-event-card {
+            border-left-color: var(--term);
+        }
+
+        .calendar-event-card.helgdag { border-left-color: var(--holiday); }
+        .calendar-event-card.lov { border-left-color: #e67e22; }
+
+        .calendar-event-date {
+            font-weight: 700;
+            font-size: 0.9rem;
+            margin-bottom: 2px;
+        }
+
+        .calendar-event-desc {
+            font-size: 0.9rem;
+            color: var(--text);
+        }
+
+        .calendar-week-label {
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--muted-text);
+            margin: 14px 0 6px 0;
+        }
+        .calendar-week-label:first-child {
+            margin-top: 0;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <button class="nav-btn" onclick="changeDate(-1)" aria-label="Föregående dag">❮</button>
+    <div style="text-align:center;">
+        <h2 id="disp-date">Laddar...</h2>
+        <small id="disp-week"></small>
+    </div>
+    <button class="nav-btn" onclick="changeDate(1)" aria-label="Nästa dag">❯</button>
+</header>
+
+<main id="app-grid"></main>
+
+<div class="controls">
+    <button type="button" class="controls-btn" onclick="openFoodWeekView()">Matsedel</button>
+    <button type="button" class="controls-btn" onclick="openCalendarView()">Lov och ledighet</button>
+    <button type="button" class="controls-btn controls-btn-icon" onclick="toggleSettings()" aria-label="Inställningar">⚙</button>
+</div>
+
+<div id="settings-view" class="overlay">
+    <h2>Inställningar</h2>
+    <button type="button" class="settings-btn" onclick="openSettingsHelp()" style="margin-bottom:12px;">
+        Hjälp (JSON)
+    </button>
+    <div id="settings-general" class="settings-section">
+        <h3>Allmänt</h3>
+        <label for="theme-select"><b>Tema</b></label>
+        <select id="theme-select" aria-label="Välj tema">
+            <option value="system">Automatiskt (följ enhet)</option>
+            <option value="light">Ljus</option>
+            <option value="dark">Mörk</option>
+        </select>
+        <button type="button" onclick="clearFoodCache()" class="settings-btn settings-btn-warn" style="margin-top:14px;">
+            ↻ Rensa matlista
+        </button>
+    </div>
+    <div id="settings-form"></div>
+    <button id="settings-save-btn" type="button" onclick="saveSettings()" class="settings-save-btn">
+        SPARA & STÄNG
+    </button>
+    <button id="settings-close-btn" type="button" onclick="toggleSettings()" class="settings-close-btn">
+        Stäng
+    </button>
+
+    <div id="settings-help" class="hidden">
+        <div class="settings-section">
+            <h3>JSON-format</h3>
+
+            <p style="margin-top:0;">
+                Appen läser dessa filer som JSON. Vid import måste strukturen matcha exemplen nedan.
+            </p>
+
+            <h4>1) Barnets schema (t.ex. <code>schema_mikaela.json</code>)</h4>
+            <pre class="help-code">{ 
+  "elev": "Elev A (exempel)",
+  "schema": [
+    {
+      "dag": "Måndag",
+      "lektioner": [
+        { "tid": "09.00-10.00", "ämne": "Matematik (Sal A1)", "lärare": "Lärare Exempel 1" }
+      ]
+    }
+  ]
+}</pre>
+
+            <h4 style="margin-top:14px;">2) Lov & helgdagar (t.ex. <code>lov_helg.json</code>)</h4>
+            <pre class="help-code">{
+  "lov": [
+    { "datum": "2026-02-23", "vecka": 9, "dag": "Måndag", "beskrivning": "Exempel-lov" }
+  ],
+  "helgdagar": [
+    { "datum": "2026-04-03", "vecka": 14, "dag": "Fredag", "beskrivning": "Exempelhelgdag" }
+  ]
+}</pre>
+
+            <h4 style="margin-top:14px;">3) Terminer (t.ex. <code>termin.json</code>)</h4>
+            <pre class="help-code">[
+  {
+    "termin": "Vårterminen 2026 (exempel)",
+    "skolstart": [{ "datum": "2026-01-12", "beskrivning": "Exempel: vårterminens första skoldag" }],
+    "skolavslutning": [{ "datum": "2026-06-11", "beskrivning": "Exempel: vårterminens sista skoldag" }]
+  }
+]</pre>
+
+            <button type="button" onclick="closeSettingsHelp()" class="settings-close-btn">
+                Stäng
+            </button>
+        </div>
+    </div>
+</div>
+       
+<div id="schedule-view" class="overlay hidden">
+    <div class="schedule-header">
+        <h2 id="schedule-title">Schema</h2>
+        <small id="schedule-subtitle"></small>
+    </div>
+    <div class="schedule-help">
+        Svep vänster/höger för att byta dag. Tryck på knappen nedan för att stänga.
+    </div>
+    <div id="schedule-content" class="lesson-list"></div>
+    <button type="button" class="schedule-close-btn" onclick="closeScheduleView()">Stäng</button>
+</div>
+
+<div id="food-week-view" class="overlay hidden">
+    <div class="schedule-header">
+        <h2 id="food-week-title">Matsedel</h2>
+        <small id="food-week-subtitle"></small>
+    </div>
+    <div id="food-week-content"></div>
+    <button type="button" class="schedule-close-btn" onclick="closeFoodWeekView()">Stäng</button>
+</div>
+
+<div id="calendar-view" class="overlay hidden">
+    <div class="schedule-header">
+        <h2 id="calendar-view-title">Lov och ledighet</h2>
+    </div>
+    <div id="calendar-view-content"></div>
+    <button type="button" class="schedule-close-btn" onclick="closeCalendarView()">Stäng</button>
+</div>
+
+<script>
+    const APP_VERSION = "v51";
+    const STORAGE_KEY = `bjorklunds_${APP_VERSION}`;
+    const FOOD_CACHE_KEY = "food_cache";
+    const THEME_STORAGE_KEY = "bjorklunds_theme";
+    const DEFAULT_CHILDREN = [
+        { name: "Elev A", file: "schema_elev_a.json", rss: "https://example.com/rss/week/elev-a?locale=sv" },
+        { name: "Elev B", file: "schema_elev_b.json", rss: "https://example.com/rss/week/elev-b?locale=sv" }
+    ];
+
+    let activeDate = new Date();
+    let appState = null;
+    let ongoingRefreshTimer = null;
+    let visibilityBound = false;
+    let scheduleViewOpen = false;
+    let scheduleViewChildIndex = null;
+    let isRestoringFromHistory = false;
+
+    const SUBJECT_COLOR_MAP = new Map();
+    const SUBJECT_COLORS = [
+        "#74b9ff", // blå
+        "#a29bfe", // lila
+        "#55efc4", // mint
+        "#ffeaa7", // gul/orange
+        "#fab1a0", // persika
+        "#fd79a8", // rosa
+        "#81ecec", // turkos
+        "#d1d8e0", // gråblå
+        "#badc58", // grön
+        "#ff7675"  // röd
+    ];
+
+    function getSubjectBase(subject) {
+        const raw = String(subject || "");
+        const base = raw.split("(")[0].trim();
+        return base || "Okänt ämne";
+    }
+
+    function getSubjectRoom(subject) {
+        const raw = String(subject || "");
+        const match = raw.match(/\(([^)]+)\)\s*$/);
+        return match ? match[1].trim() : "";
+    }
+
+    function hideSettingsViewDom() {
+        const view = document.getElementById("settings-view");
+        if (view) view.style.display = "none";
+    }
+
+    function hideAllOverlaysDom() {
+        // Important: this function must NOT call close*() because close*()
+        // can trigger history.back(), which breaks opening overlays.
+        const scheduleEl = document.getElementById("schedule-view");
+        if (scheduleEl) {
+            scheduleEl.classList.add("hidden");
+            scheduleEl.style.display = "none";
+        }
+
+        const foodWeekEl = document.getElementById("food-week-view");
+        if (foodWeekEl) {
+            foodWeekEl.classList.add("hidden");
+            foodWeekEl.style.display = "none";
+        }
+
+        const calendarEl = document.getElementById("calendar-view");
+        if (calendarEl) {
+            calendarEl.classList.add("hidden");
+            calendarEl.style.display = "none";
+        }
+
+        scheduleViewOpen = false;
+        scheduleViewChildIndex = null;
+
+        hideSettingsViewDom();
+    }
+
+    (function initBackNavigationSupport() {
+        // Ensure we always have a "base" state in history.
+        try {
+            history.replaceState({ overlay: null }, "");
+        } catch {
+            // ignore
+        }
+
+        window.addEventListener("popstate", (event) => {
+            const st = event && event.state ? event.state : {};
+            const overlay = st.overlay;
+
+            isRestoringFromHistory = true;
+            try {
+                if (!overlay) {
+                    hideAllOverlaysDom();
+                    return;
+                }
+
+                if (overlay === "schedule") {
+                    openScheduleView(st.childIndex);
+                } else if (overlay === "food-week") {
+                    openFoodWeekView();
+                } else if (overlay === "calendar") {
+                    openCalendarView();
+                } else if (overlay === "settings") {
+                    hideAllOverlaysDom();
+                    const view = document.getElementById("settings-view");
+                    if (view) {
+                        const themeSelect = document.getElementById("theme-select");
+                        if (themeSelect) themeSelect.value = getThemePreference();
+                        renderSettingsForm();
+                        view.style.display = "block";
+                    }
+                } else {
+                    hideAllOverlaysDom();
+                }
+            } finally {
+                isRestoringFromHistory = false;
+            }
+        });
+    })();
+
+    function getWeek(d) {
+        const date = new Date(d.getTime());
+        date.setHours(0, 0, 0, 0);
+        date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
+        return 1 + Math.round(
+            ((date.getTime() - new Date(date.getFullYear(), 0, 4).getTime()) / 86400000
+            - 3
+            + (new Date(date.getFullYear(), 0, 4).getDay() + 6) % 7) / 7
+        );
+    }
+
+    function getLocalDateStr(date) {
+        return date.toLocaleDateString("sv-SE");
+    }
+
+    function skipWeekend(date, dir) {
+        while (date.getDay() === 0 || date.getDay() === 6) {
+            date.setDate(date.getDate() + (dir >= 0 ? 1 : -1));
+        }
+        return date;
+    }
+
+    function escapeHtml(value) {
+        return String(value ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    function parseTimeToMinutes(timeStr) {
+        if (!timeStr || typeof timeStr !== "string") return null;
+        const match = timeStr.trim().match(/^(\d{1,2})[.:](\d{1,2})$/);
+        if (!match) return null;
+
+        const hours = parseInt(match[1], 10);
+        const minutes = parseInt(match[2], 10);
+
+        if (Number.isNaN(hours) || Number.isNaN(minutes)) return null;
+        if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+
+        return hours * 60 + minutes;
+    }
+
+    function parseLessonRange(tid) {
+        if (!tid || typeof tid !== "string") return null;
+        const parts = tid.split("-");
+        if (parts.length < 2) return null;
+
+        const start = parseTimeToMinutes(parts[0]);
+        const end = parseTimeToMinutes(parts[1]);
+
+        if (start === null || end === null) return null;
+        return { start, end };
+    }
+
+    function getSortedLessons(lektioner) {
+        if (!Array.isArray(lektioner)) return [];
+        return [...lektioner].sort((a, b) => {
+            const aRange = parseLessonRange(a?.tid);
+            const bRange = parseLessonRange(b?.tid);
+            const aStart = aRange ? aRange.start : Number.MAX_SAFE_INTEGER;
+            const bStart = bRange ? bRange.start : Number.MAX_SAFE_INTEGER;
+            return aStart - bStart;
+        });
+    }
+
+    function getDefaultAppState() {
+        return {
+            children: [],
+            lov: { lov: [], helgdagar: [] },
+            terms: []
+        };
+    }
+
+    function getThemePreference() {
+        return localStorage.getItem(THEME_STORAGE_KEY) || "system";
+    }
+
+    function applyTheme(preference) {
+        let resolved = preference;
+        if (preference === "system") {
+            resolved = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        }
+        document.documentElement.setAttribute("data-theme", resolved);
+        const meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.content = resolved === "dark" ? "#1a1d21" : "#2c3e50";
+    }
+
+    function getSubjectColorKey(subject) {
+        const base = getSubjectBase(subject).toLowerCase();
+        return base || "okänd";
+    }
+
+    function getSubjectColor(subject) {
+        const key = getSubjectColorKey(subject);
+
+        // Hem- och konsumentkunskap får samma grundfärg som mat-rutan
+        if (key.includes("hem- och konsumentkunskap")) {
+            return "#f1c40f";
+        }
+
+        if (SUBJECT_COLOR_MAP.has(key)) {
+            return SUBJECT_COLOR_MAP.get(key);
+        }
+        const index = SUBJECT_COLOR_MAP.size % SUBJECT_COLORS.length;
+        const color = SUBJECT_COLORS[index];
+        SUBJECT_COLOR_MAP.set(key, color);
+        return color;
+    }
+
+    function hexToRgba(hex, alpha) {
+        if (!hex) return `rgba(0,0,0,${alpha})`;
+        let h = hex.replace("#", "").trim();
+        if (h.length === 3) {
+            h = h.split("").map(ch => ch + ch).join("");
+        }
+        if (h.length !== 6) return `rgba(0,0,0,${alpha})`;
+        const r = parseInt(h.slice(0, 2), 16) || 0;
+        const g = parseInt(h.slice(2, 4), 16) || 0;
+        const b = parseInt(h.slice(4, 6), 16) || 0;
+        return `rgba(${r},${g},${b},${alpha})`;
+    }
+
+    function getLessonBackgroundColor(subject) {
+        const base = getSubjectColor(subject);
+        // Ljus pastellbakgrund baserat på ämnesfärgen
+        return hexToRgba(base, 0.12);
+    }
+
+    async function fetchJsonFile(path) {
+        const res = await fetch(path, { cache: "no-store" });
+        if (!res.ok) {
+            throw new Error(`Kunde inte läsa ${path} (${res.status})`);
+        }
+        return res.json();
+    }
+
+    async function loadRemoteAppState() {
+        const childSchemas = await Promise.all(
+            DEFAULT_CHILDREN.map(child => fetchJsonFile(child.file))
+        );
+
+        const lov = await fetchJsonFile("lov_helg.json");
+        const terms = await fetchJsonFile("termin.json");
+
+        return {
+            children: DEFAULT_CHILDREN.map((child, index) => ({
+                name: child.name,
+                schema: childSchemas[index],
+                rss: child.rss
+            })),
+            lov,
+            terms
+        };
+    }
+
+    async function initApp() {
+        applyTheme(getThemePreference());
+        // Clean up stale localStorage entries from previous app versions.
+        // This prevents schema/terms/lov changes from appearing "stuck" on some devices.
+        try {
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (!key) continue;
+                if (key.startsWith("bjorklunds_") && key !== STORAGE_KEY) {
+                    localStorage.removeItem(key);
+                }
+            }
+        } catch {
+            // ignore
+        }
+        skipWeekend(activeDate, 1);
+
+        let loadedFromStorage = false;
+        const saved = localStorage.getItem(STORAGE_KEY);
+
+        if (saved) {
+            try {
+                const parsed = JSON.parse(saved);
+                if (parsed && typeof parsed === "object") {
+                    appState = parsed;
+                    loadedFromStorage = true;
+                }
+            } catch (e) {
+                console.warn("Kunde inte läsa sparad appdata. Hämtar om från filer.", e);
+                localStorage.removeItem(STORAGE_KEY);
+            }
+        }
+
+        if (!loadedFromStorage) {
+            try {
+                appState = await loadRemoteAppState();
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+            } catch (e) {
+                console.error("Initiering misslyckades:", e);
+                appState = getDefaultAppState();
+            }
+        }
+
+        renderApp();
+        startOngoingRefresh();
+    }
+
+    function changeDate(dir) {
+        activeDate.setDate(activeDate.getDate() + dir);
+        skipWeekend(activeDate, dir);
+        renderApp();
+        if (scheduleViewOpen) {
+            renderScheduleView();
+        }
+    }
+
+    let touchStartX = 0;
+
+    document.addEventListener("touchstart", e => {
+        touchStartX = e.touches[0].clientX;
+    }, { passive: true });
+
+    document.addEventListener("touchend", e => {
+        const dx = touchStartX - e.changedTouches[0].clientX;
+        if (Math.abs(dx) > 70) {
+            changeDate(dx > 0 ? 1 : -1);
+        }
+    }, { passive: true });
+
+    function renderApp() {
+        if (!appState) return;
+
+        const grid = document.getElementById("app-grid");
+        const dateStr = getLocalDateStr(activeDate);
+        const todayStr = getLocalDateStr(new Date());
+        const isPastDay = dateStr < todayStr;
+        const dayName = activeDate.toLocaleDateString("sv-SE", { weekday: "long" });
+        const currentWeekNum = getWeek(new Date());
+        const selectedWeekNum = getWeek(activeDate);
+
+        document.getElementById("disp-date").innerText = activeDate.toLocaleDateString("sv-SE", {
+            weekday: "long",
+            day: "numeric",
+            month: "long"
+        });
+        document.getElementById("disp-week").innerText = "Vecka " + selectedWeekNum;
+
+        // Mark whole UI as "past" when we tittar på gammal dag
+        document.body.classList.toggle("past-day", isPastDay);
+
+        grid.innerHTML = "";
+
+        appState.children.forEach((child, idx) => {
+            const card = document.createElement("div");
+            card.className = "child-card";
+
+            const lovLista = Array.isArray(appState.lov?.lov) ? appState.lov.lov : [];
+            const helgdagLista = Array.isArray(appState.lov?.helgdagar) ? appState.lov.helgdagar : [];
+            const holi = lovLista.find(l => l.datum === dateStr) || helgdagLista.find(h => h.datum === dateStr);
+
+            let termEvent = null;
+            let vtSlutDateStr = null;
+            let htStartDateStr = null;
+
+            (Array.isArray(appState.terms) ? appState.terms : []).forEach(t => {
+                const skolstart = Array.isArray(t.skolstart) ? t.skolstart : [];
+                const skolavslutning = Array.isArray(t.skolavslutning) ? t.skolavslutning : [];
+
+                const start = skolstart.find(s => s.datum === dateStr);
+                const slut = skolavslutning.find(s => s.datum === dateStr);
+
+                if (start) termEvent = start.beskrivning;
+                if (slut) termEvent = slut.beskrivning;
+
+                if ((t.termin || "").toLowerCase().includes("vår") && skolavslutning[0]?.datum) {
+                    vtSlutDateStr = skolavslutning[0].datum;
+                }
+                if ((t.termin || "").toLowerCase().includes("höst") && skolstart[0]?.datum) {
+                    htStartDateStr = skolstart[0].datum;
+                }
+            });
+
+            const isSummer = (vtSlutDateStr && htStartDateStr)
+                ? (dateStr > vtSlutDateStr && dateStr < htStartDateStr)
+                : false;
+
+            let html = `<div class="child-name">${escapeHtml(child.name)}</div><div class="card-inner">`;
+
+            if (termEvent) {
+                html += `<div class="msg-box term-msg">🔔 ${escapeHtml(termEvent)}</div>`;
+            } else if (holi || isSummer) {
+                html += `<div class="msg-box holiday-msg">🏖️ ${escapeHtml(holi ? holi.beskrivning : "Sommarlov")}</div>`;
+            } else {
+                const schemaLista = Array.isArray(child.schema?.schema)
+                    ? child.schema.schema
+                    : (Array.isArray(child.schema) ? child.schema : []);
+
+                const dayData = schemaLista.find(s => (s.dag || "").toLowerCase() === dayName.toLowerCase());
+
+                if (dayData && Array.isArray(dayData.lektioner) && dayData.lektioner.length > 0) {
+                    const sortedLessons = getSortedLessons(dayData.lektioner);
+                    const firstRange = parseLessonRange(sortedLessons[0]?.tid);
+                    const lastRange = parseLessonRange(sortedLessons[sortedLessons.length - 1]?.tid);
+
+                    const startText = firstRange ? sortedLessons[0].tid.split("-")[0] : "??";
+                    const endText = lastRange ? sortedLessons[sortedLessons.length - 1].tid.split("-")[1] : "??";
+
+                    html += `<div class="time-box"><b>Skoltider:</b> ${escapeHtml(startText)} - ${escapeHtml(endText)}</div>`;
+                    html += `<div class="ongoing" id="curr-${idx}" onclick="openScheduleView(${idx})" role="button">Laddar...</div>`;
+                } else {
+                    html += `<div class="msg-box holiday-msg">Ingen skola idag</div>`;
+                }
+            }
+
+            html += `</div>`;
+
+            let foodId = null;
+            if (selectedWeekNum === currentWeekNum && !holi && !isSummer) {
+                foodId = `food-${idx}`;
+                html += `<div class="food-box" id="${foodId}">Hämtar mat...</div>`;
+            }
+
+            card.innerHTML = html;
+            grid.appendChild(card);
+
+            if (!termEvent && !holi && !isSummer) {
+                const schemaLista = Array.isArray(child.schema?.schema)
+                    ? child.schema.schema
+                    : (Array.isArray(child.schema) ? child.schema : []);
+
+                const dayData = schemaLista.find(s => (s.dag || "").toLowerCase() === dayName.toLowerCase());
+
+                if (dayData && Array.isArray(dayData.lektioner) && dayData.lektioner.length > 0) {
+                    updateOngoing(dayData.lektioner, idx);
+                }
+            }
+
+            if (foodId) {
+                fetchFood(child.rss, foodId, dayName);
+            }
+        });
+    }
+
+    function updateOngoing(lektioner, idx) {
+        const el = document.getElementById(`curr-${idx}`);
+        if (!el) return;
+
+        const now = new Date();
+        const nowMin = now.getHours() * 60 + now.getMinutes();
+        const todayStr = getLocalDateStr(now);
+        const activeStr = getLocalDateStr(activeDate);
+        const isToday = activeStr === todayStr;
+        const isPastDay = activeStr < todayStr;
+
+        let currHtml = "";
+        let activeLessonForColor = null;
+        let isEmptyState = true;
+
+        if (isToday) {
+            const sortedLessons = getSortedLessons(lektioner);
+
+            for (const l of sortedLessons) {
+                const range = parseLessonRange(l.tid);
+                if (!range) continue;
+
+                if (nowMin >= range.start && nowMin <= range.end) {
+                    activeLessonForColor = l;
+                    isEmptyState = false;
+                    const tidText = escapeHtml(l.tid);
+                    const ämneText = escapeHtml(getSubjectBase(l.ämne));
+                    const room = escapeHtml(getSubjectRoom(l.ämne));
+                    const teacher = escapeHtml(l.lärare || "");
+                    const infoParts = [];
+                    if (room) infoParts.push(`Sal: ${room}`);
+                    if (teacher) infoParts.push(`Lärare: ${teacher}`);
+                    const infoText = infoParts.length ? infoParts.join(" · ") : "";
+
+                    currHtml =
+                        `<span class="ongoing-label">Pågående:</span>` +
+                        `<span class="ongoing-subject">${tidText}: ${ämneText}</span>` +
+                        `<span class="ongoing-teacher">${infoText}</span>`;
+                    break;
+                }
+            }
+
+            if (isEmptyState) {
+                const sortedLessons = getSortedLessons(lektioner);
+                if (sortedLessons.length > 0) {
+                    let nextLesson = null;
+                    for (const l of sortedLessons) {
+                        const range = parseLessonRange(l.tid);
+                        if (range && range.start > nowMin) {
+                            nextLesson = l;
+                            break;
+                        }
+                    }
+                    if (nextLesson) {
+                        const tidText = escapeHtml(nextLesson.tid);
+                        const ämneText = escapeHtml(getSubjectBase(nextLesson.ämne));
+                        const room = escapeHtml(getSubjectRoom(nextLesson.ämne));
+                        const teacher = escapeHtml(nextLesson.lärare || "");
+                        const infoParts = [];
+                        if (room) infoParts.push(`Sal: ${room}`);
+                        if (teacher) infoParts.push(`Lärare: ${teacher}`);
+                        const infoText = infoParts.length ? infoParts.join(" · ") : "";
+
+                        currHtml =
+                            `<span class="ongoing-label ongoing-label-muted">Nästa lektion:</span>` +
+                            `<span class="ongoing-subject ongoing-subject-muted">${tidText}: ${ämneText}</span>` +
+                            `<span class="ongoing-teacher">${infoText}</span>`;
+                    } else {
+                        currHtml = `<span class="ongoing-label ongoing-label-muted">Skoldagen är avslutad</span>`;
+                    }
+                } else {
+                    currHtml = `<span class="ongoing-label ongoing-label-muted">Skoldagen är avslutad</span>`;
+                }
+            }
+        } else if (isPastDay) {
+            currHtml = `<span class="ongoing-label ongoing-label-muted">Skoldagen är avslutad</span>`;
+        } else {
+            currHtml = `<span class="ongoing-label ongoing-label-muted">Skoldagen är inte påbörjad</span>`;
+        }
+
+        el.innerHTML = currHtml;
+
+        if (isToday && !activeLessonForColor && currHtml.includes("Nästa lektion:")) {
+            el.classList.add("ongoing-empty");
+            el.style.background = "#e9ecef";
+            el.style.borderColor = "transparent";
+            el.style.borderLeftColor = "#6c757d";
+            el.style.borderLeftWidth = "4px";
+            el.style.color = "#495057";
+        } else if (!isToday || (isToday && !currHtml.includes("Pågående:"))) {
+            // Empty/summary states
+            el.classList.add("ongoing-empty");
+            el.style.background = "#e9ecef";
+            el.style.borderColor = "transparent";
+            el.style.borderLeftColor = "#6c757d";
+            el.style.borderLeftWidth = "4px";
+            el.style.color = "#495057";
+        } else {
+            el.classList.remove("ongoing-empty");
+            const color = getSubjectColor(activeLessonForColor?.ämne);
+            const bg = getLessonBackgroundColor(activeLessonForColor?.ämne);
+            el.style.background = bg;
+            el.style.borderColor = "transparent";
+            el.style.borderLeftColor = color;
+            el.style.borderLeftWidth = "4px";
+            el.style.color = "#333";
+        }
+    }
+
+    function refreshAllOngoingStates() {
+        if (!appState) return;
+
+        const dayName = activeDate.toLocaleDateString("sv-SE", { weekday: "long" });
+
+        appState.children.forEach((child, idx) => {
+            const schemaLista = Array.isArray(child.schema?.schema)
+                ? child.schema.schema
+                : (Array.isArray(child.schema) ? child.schema : []);
+
+            const dayData = schemaLista.find(s => (s.dag || "").toLowerCase() === dayName.toLowerCase());
+
+            if (dayData && Array.isArray(dayData.lektioner) && dayData.lektioner.length > 0) {
+                updateOngoing(dayData.lektioner, idx);
+            }
+        });
+    }
+
+    function startOngoingRefresh() {
+        if (ongoingRefreshTimer) {
+            clearInterval(ongoingRefreshTimer);
+        }
+
+        ongoingRefreshTimer = setInterval(() => {
+            refreshAllOngoingStates();
+        }, 60000);
+
+        if (!visibilityBound) {
+            document.addEventListener("visibilitychange", () => {
+                if (!document.hidden) {
+                    refreshAllOngoingStates();
+                }
+            });
+            visibilityBound = true;
+        }
+    }
+
+    async function fetchFood(url, id, day) {
+        const el = document.getElementById(id);
+        if (!el) return;
+
+        const today = new Date().toLocaleDateString("sv-SE");
+
+        let cache = {};
+        try {
+            cache = JSON.parse(localStorage.getItem(FOOD_CACHE_KEY) || "{}");
+        } catch (e) {
+            console.warn("Mat-cache kunde inte läsas. Återställer cache.", e);
+            cache = {};
+            localStorage.removeItem(FOOD_CACHE_KEY);
+        }
+
+        if (cache[url] && cache[url].date === today && cache[url].xml) {
+            displayFood(cache[url].xml, id, day, true);
+            return;
+        }
+
+        try {
+            const res = await fetch(`https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(url)}`);
+            if (!res.ok) {
+                throw new Error(`Matproxy svarade med status ${res.status}`);
+            }
+
+            const xmlText = await res.text();
+            if (!xmlText || !xmlText.includes("<rss")) {
+                throw new Error("Ogiltigt RSS-svar");
+            }
+
+            cache[url] = { date: today, xml: xmlText };
+            localStorage.setItem(FOOD_CACHE_KEY, JSON.stringify(cache));
+            displayFood(xmlText, id, day, false);
+        } catch (e) {
+            console.warn("Kunde inte hämta mat:", e);
+            displayFoodError(id, "Kunde inte hämta mat just nu.");
+        }
+    }
+
+    function sanitizeFoodHtml(food) {
+        const withBreaks = String(food || "")
+            .replace(/&lt;br\s*\/?&gt;/gi, "<br>")
+            .replace(/<br\s*\/?>/gi, "<br>");
+
+        const parts = withBreaks.split(/<br\s*\/?>/i);
+        const escapedParts = parts.map(part => escapeHtml(part));
+
+        return escapedParts.join("<br>");
+    }
+
+    function displayFood(xmlText, id, day, fromCache) {
+        const el = document.getElementById(id);
+        if (!el) return;
+
+        try {
+            const xml = new DOMParser().parseFromString(xmlText, "text/xml");
+            const parseError = xml.querySelector("parsererror");
+            if (parseError) {
+                throw new Error("XML-kunde inte tolkas");
+            }
+
+            const items = xml.querySelectorAll("item");
+            let food = "Meny saknas.";
+
+            items.forEach(i => {
+                const title = i.querySelector("title")?.textContent || "";
+                const description = i.querySelector("description")?.textContent || "";
+
+                if (title.toLowerCase().includes(day.toLowerCase()) && description.trim()) {
+                    food = description;
+                }
+            });
+
+            const icon = fromCache ? "⚡" : "🌐";
+            const safeFoodHtml = sanitizeFoodHtml(food);
+
+            el.innerHTML = `<b>Dagens lunch:</b><br>${safeFoodHtml}<span style="position:absolute;bottom:4px;right:6px;font-size:0.6rem;opacity:0.4;">${icon}</span>`;
+        } catch (e) {
+            console.warn("Kunde inte visa matdata:", e);
+            displayFoodError(id, "Meny saknas.");
+        }
+    }
+
+    function displayFoodError(id, message) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.innerHTML = `<b>Dagens lunch:</b><br>${escapeHtml(message)}`;
+    }
+
+    function getFoodFromXml(xmlText, dayName) {
+        if (!xmlText || !xmlText.includes("<rss")) return "Meny saknas.";
+        try {
+            const xml = new DOMParser().parseFromString(xmlText, "text/xml");
+            const items = xml.querySelectorAll("item");
+            let food = "Meny saknas.";
+            items.forEach(i => {
+                const title = i.querySelector("title")?.textContent || "";
+                const description = i.querySelector("description")?.textContent || "";
+                if (title.toLowerCase().includes(String(dayName).toLowerCase()) && description.trim()) {
+                    food = description;
+                }
+            });
+            return food;
+        } catch {
+            return "Meny saknas.";
+        }
+    }
+
+    function openFoodWeekView() {
+        if (!isRestoringFromHistory) {
+            try {
+                history.pushState({ overlay: "food-week" }, "");
+            } catch {
+                // ignore
+            }
+        }
+
+        hideAllOverlaysDom();
+
+        const view = document.getElementById("food-week-view");
+        if (!view) return;
+        view.classList.remove("hidden");
+        view.style.display = "block";
+        renderFoodWeekView();
+    }
+
+    function closeFoodWeekView() {
+        document.getElementById("food-week-view").classList.add("hidden");
+        document.getElementById("food-week-view").style.display = "none";
+        try {
+            const st = history && history.state ? history.state : {};
+            if (!isRestoringFromHistory && st.overlay === "food-week") history.back();
+        } catch {
+            // ignore
+        }
+    }
+
+    async function renderFoodWeekView() {
+        if (!appState || !appState.children) return;
+        const titleEl = document.getElementById("food-week-title");
+        const subtitleEl = document.getElementById("food-week-subtitle");
+        const contentEl = document.getElementById("food-week-content");
+        if (!titleEl || !subtitleEl || !contentEl) return;
+
+        const now = new Date();
+        const weekNum = getWeek(now);
+        titleEl.textContent = "Matsedel";
+        subtitleEl.textContent = "Vecka " + weekNum;
+
+        const weekdays = ["Måndag", "Tisdag", "Onsdag", "Torsdag", "Fredag"];
+        let cache = {};
+        try {
+            cache = JSON.parse(localStorage.getItem(FOOD_CACHE_KEY) || "{}");
+        } catch {
+            cache = {};
+        }
+
+        const getXmlForChild = async (child) => {
+            if (cache[child.rss] && cache[child.rss].xml) return cache[child.rss].xml;
+            try {
+                const res = await fetch(`https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(child.rss)}`);
+                if (!res.ok) throw new Error(res.status);
+                const xmlText = await res.text();
+                if (!xmlText || !xmlText.includes("<rss")) throw new Error("Ogiltigt svar");
+                cache[child.rss] = { date: now.toLocaleDateString("sv-SE"), xml: xmlText };
+                localStorage.setItem(FOOD_CACHE_KEY, JSON.stringify(cache));
+                return xmlText;
+            } catch (e) {
+                console.warn("Kunde inte hämta matsedel:", e);
+                return null;
+            }
+        };
+
+        const parts = [];
+        for (const dayName of weekdays) {
+            const dayCards = [];
+            for (let i = 0; i < appState.children.length; i++) {
+                const child = appState.children[i];
+                const xmlText = await getXmlForChild(child);
+                const menu = xmlText ? getFoodFromXml(xmlText, dayName) : "Kunde inte hämta.";
+                const safeHtml = sanitizeFoodHtml(menu);
+                dayCards.push(`<div class="food-day"><div class="food-day-title">${escapeHtml(child.name)}</div><div class="food-day-menu">${safeHtml}</div></div>`);
+            }
+            parts.push(`<div class="food-week-card"><h4>${escapeHtml(dayName)}</h4>${dayCards.join("")}</div>`);
+        }
+        contentEl.innerHTML = parts.join("");
+    }
+
+    function addDaysToDateStr(dateStr, days) {
+        const d = new Date(dateStr + "T12:00:00");
+        d.setDate(d.getDate() + days);
+        return d.toISOString().slice(0, 10);
+    }
+
+    function mergeConsecutiveSameLabel(items, type) {
+        if (items.length === 0) return [];
+        items.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+        const merged = [];
+        let run = { startDate: items[0].date, endDate: items[0].date, label: items[0].label };
+        for (let i = 1; i < items.length; i++) {
+            const next = items[i];
+            const expectedNext = addDaysToDateStr(run.endDate, 1);
+            if (next.label === run.label && next.date === expectedNext) {
+                run.endDate = next.date;
+            } else {
+                merged.push({ ...run, type });
+                run = { startDate: next.date, endDate: next.date, label: next.label };
+            }
+        }
+        merged.push({ ...run, type });
+        return merged;
+    }
+
+    function buildCalendarEvents() {
+        const events = [];
+        const lov = Array.isArray(appState?.lov?.lov) ? appState.lov.lov : [];
+        const helgdagar = Array.isArray(appState?.lov?.helgdagar) ? appState.lov.helgdagar : [];
+        const terms = Array.isArray(appState?.terms) ? appState.terms : [];
+
+        const lovItems = lov.map(l => ({ date: l.datum, label: l.beskrivning || "Lov" }));
+        const helgdagarItems = helgdagar.map(h => ({ date: h.datum, label: h.beskrivning || "Helgdag" }));
+
+        mergeConsecutiveSameLabel(lovItems, "lov").forEach(e => {
+            events.push({ startDate: e.startDate, endDate: e.endDate, label: e.label, type: e.type });
+        });
+        mergeConsecutiveSameLabel(helgdagarItems, "helgdag").forEach(e => {
+            events.push({ startDate: e.startDate, endDate: e.endDate, label: e.label, type: e.type });
+        });
+        terms.forEach(t => {
+            (t.skolstart || []).forEach(s => {
+                events.push({ date: s.datum, label: s.beskrivning || "Skolstart", type: "termin" });
+            });
+            (t.skolavslutning || []).forEach(s => {
+                events.push({ date: s.datum, label: s.beskrivning || "Skolavslutning", type: "termin" });
+            });
+        });
+        events.sort((a, b) => {
+            const dateA = a.startDate || a.date || "";
+            const dateB = b.startDate || b.date || "";
+            return dateA.localeCompare(dateB);
+        });
+        return events;
+    }
+
+    function openCalendarView() {
+        if (!isRestoringFromHistory) {
+            try {
+                history.pushState({ overlay: "calendar" }, "");
+            } catch {
+                // ignore
+            }
+        }
+
+        hideAllOverlaysDom();
+
+        const view = document.getElementById("calendar-view");
+        if (!view) return;
+        view.classList.remove("hidden");
+        view.style.display = "block";
+        renderCalendarView();
+    }
+
+    function closeCalendarView() {
+        document.getElementById("calendar-view").classList.add("hidden");
+        document.getElementById("calendar-view").style.display = "none";
+        try {
+            const st = history && history.state ? history.state : {};
+            if (!isRestoringFromHistory && st.overlay === "calendar") history.back();
+        } catch {
+            // ignore
+        }
+    }
+
+    function renderCalendarView() {
+        if (!appState) return;
+        const titleEl = document.getElementById("calendar-view-title");
+        const contentEl = document.getElementById("calendar-view-content");
+        if (!titleEl || !contentEl) return;
+
+        titleEl.textContent = "Lov och ledighet";
+
+        const events = buildCalendarEvents();
+        if (events.length === 0) {
+            contentEl.innerHTML = "<p>Inga händelser sparade.</p>";
+            return;
+        }
+        const parts = [];
+        let lastWeek = null;
+        events.forEach(e => {
+            const typeClass = e.type === "helgdag" ? "helgdag" : e.type === "lov" ? "lov" : "";
+            let w;
+            let dateLabel;
+            if (e.startDate && e.endDate) {
+                w = getWeek(new Date(e.startDate + "T12:00:00"));
+                dateLabel = e.startDate === e.endDate ? e.startDate : `${e.startDate}-${e.endDate}`;
+            } else {
+                w = getWeek(new Date(e.date + "T12:00:00"));
+                dateLabel = e.date;
+            }
+            if (w !== lastWeek) {
+                parts.push(`<div class="calendar-week-label">Vecka ${w}</div>`);
+                lastWeek = w;
+            }
+            parts.push(`<div class="calendar-event-card ${typeClass}"><div class="calendar-event-date">${escapeHtml(dateLabel)}</div><div class="calendar-event-desc">${escapeHtml(e.label)}</div></div>`);
+        });
+        contentEl.innerHTML = parts.join("");
+    }
+
+    function openScheduleView(childIndex) {
+        if (!appState || !appState.children || !appState.children[childIndex]) return;
+        if (!isRestoringFromHistory) {
+            try {
+                history.pushState({ overlay: "schedule", childIndex }, "");
+            } catch {
+                // ignore
+            }
+        }
+
+        hideAllOverlaysDom();
+
+        scheduleViewOpen = true;
+        scheduleViewChildIndex = childIndex;
+
+        const view = document.getElementById("schedule-view");
+        view.classList.remove("hidden");
+        view.style.display = "block";
+
+        renderScheduleView();
+    }
+
+    function closeScheduleView() {
+        scheduleViewOpen = false;
+        scheduleViewChildIndex = null;
+
+        const view = document.getElementById("schedule-view");
+        view.classList.add("hidden");
+        view.style.display = "none";
+        try {
+            const st = history && history.state ? history.state : {};
+            if (!isRestoringFromHistory && st.overlay === "schedule") history.back();
+        } catch {
+            // ignore
+        }
+    }
+
+    function renderScheduleView() {
+        if (!scheduleViewOpen || scheduleViewChildIndex == null || !appState) return;
+
+        const child = appState.children[scheduleViewChildIndex];
+        if (!child) return;
+
+        const dateStr = getLocalDateStr(activeDate);
+        const dayName = activeDate.toLocaleDateString("sv-SE", { weekday: "long" });
+
+        const titleEl = document.getElementById("schedule-title");
+        const subtitleEl = document.getElementById("schedule-subtitle");
+        const contentEl = document.getElementById("schedule-content");
+
+        if (!titleEl || !subtitleEl || !contentEl) return;
+
+        titleEl.textContent = `${child.name} – ${dayName}`;
+        subtitleEl.textContent = `${activeDate.toLocaleDateString("sv-SE", {
+            day: "numeric",
+            month: "long"
+        })} · Vecka ${getWeek(activeDate)}`;
+
+        const lovLista = Array.isArray(appState.lov?.lov) ? appState.lov.lov : [];
+        const helgdagLista = Array.isArray(appState.lov?.helgdagar) ? appState.lov.helgdagar : [];
+        const holi = lovLista.find(l => l.datum === dateStr) || helgdagLista.find(h => h.datum === dateStr);
+
+        let termEvent = null;
+        let vtSlutDateStr = null;
+        let htStartDateStr = null;
+
+        (Array.isArray(appState.terms) ? appState.terms : []).forEach(t => {
+            const skolstart = Array.isArray(t.skolstart) ? t.skolstart : [];
+            const skolavslutning = Array.isArray(t.skolavslutning) ? t.skolavslutning : [];
+
+            const start = skolstart.find(s => s.datum === dateStr);
+            const slut = skolavslutning.find(s => s.datum === dateStr);
+
+            if (start) termEvent = start.beskrivning;
+            if (slut) termEvent = slut.beskrivning;
+
+            if ((t.termin || "").toLowerCase().includes("vår") && skolavslutning[0]?.datum) {
+                vtSlutDateStr = skolavslutning[0].datum;
+            }
+            if ((t.termin || "").toLowerCase().includes("höst") && skolstart[0]?.datum) {
+                htStartDateStr = skolstart[0].datum;
+            }
+        });
+
+        const isSummer = (vtSlutDateStr && htStartDateStr)
+            ? (dateStr > vtSlutDateStr && dateStr < htStartDateStr)
+            : false;
+
+        contentEl.innerHTML = "";
+
+        if (termEvent) {
+            contentEl.innerHTML = `<div class="msg-box term-msg">🔔 ${escapeHtml(termEvent)}</div>`;
+            return;
+        }
+
+        if (holi || isSummer) {
+            contentEl.innerHTML = `<div class="msg-box holiday-msg">🏖️ ${escapeHtml(holi ? holi.beskrivning : "Sommarlov")}</div>`;
+            return;
+        }
+
+        const schemaLista = Array.isArray(child.schema?.schema)
+            ? child.schema.schema
+            : (Array.isArray(child.schema) ? child.schema : []);
+
+        const dayData = schemaLista.find(s => (s.dag || "").toLowerCase() === dayName.toLowerCase());
+
+        if (!dayData || !Array.isArray(dayData.lektioner) || dayData.lektioner.length === 0) {
+            contentEl.innerHTML = `<div class="msg-box holiday-msg">Ingen skola idag</div>`;
+            return;
+        }
+
+        const sortedLessons = getSortedLessons(dayData.lektioner);
+        const fragments = [];
+
+        sortedLessons.forEach(l => {
+            const color = getSubjectColor(l.ämne);
+            const bg = getLessonBackgroundColor(l.ämne);
+            const time = escapeHtml(l.tid || "");
+            const subject = escapeHtml(getSubjectBase(l.ämne || ""));
+            const room = escapeHtml(getSubjectRoom(l.ämne || ""));
+            const teacher = escapeHtml(l.lärare || "");
+
+            const infoParts = [];
+            if (room) infoParts.push(`Sal: ${room}`);
+            if (teacher) infoParts.push(`Lärare: ${teacher}`);
+            const infoLine = infoParts.length ? `<div class="lesson-teacher">${infoParts.join(" · ")}</div>` : "";
+
+            fragments.push(
+                `<div class="lesson-card" style="border-left-color:${color};background:${bg};">` +
+                `<div class="lesson-subject">${subject}</div>` +
+                `<div class="lesson-time">${time}</div>` +
+                infoLine +
+                `</div>`
+            );
+        });
+
+        contentEl.innerHTML = fragments.join("");
+    }
+
+    function toggleSettings() {
+        const view = document.getElementById("settings-view");
+        const open = view.style.display === "block";
+
+        if (open) {
+            view.style.display = "none";
+            try {
+                const st = history && history.state ? history.state : {};
+                if (!isRestoringFromHistory && st.overlay === "settings") history.back();
+            } catch {
+                // ignore
+            }
+            return;
+        }
+
+        if (!isRestoringFromHistory) {
+            try {
+                history.pushState({ overlay: "settings" }, "");
+            } catch {
+                // ignore
+            }
+        }
+
+        hideAllOverlaysDom();
+
+        const themeSelect = document.getElementById("theme-select");
+        if (themeSelect) themeSelect.value = getThemePreference();
+        renderSettingsForm();
+        view.style.display = "block";
+    }
+
+    function openSettingsHelp() {
+        const help = document.getElementById("settings-help");
+        const general = document.getElementById("settings-general");
+        const form = document.getElementById("settings-form");
+        const saveBtn = document.getElementById("settings-save-btn");
+        const closeBtn = document.getElementById("settings-close-btn");
+
+        if (!help) return;
+
+        if (general) general.style.display = "none";
+        if (form) form.style.display = "none";
+        if (saveBtn) saveBtn.style.display = "none";
+        if (closeBtn) closeBtn.style.display = "none";
+
+        help.classList.remove("hidden");
+        help.style.display = "block";
+    }
+
+    function closeSettingsHelp() {
+        const help = document.getElementById("settings-help");
+        const general = document.getElementById("settings-general");
+        const form = document.getElementById("settings-form");
+        const saveBtn = document.getElementById("settings-save-btn");
+        const closeBtn = document.getElementById("settings-close-btn");
+
+        if (!help) return;
+
+        help.classList.add("hidden");
+        help.style.display = "none";
+
+        if (general) general.style.display = "";
+        if (form) form.style.display = "";
+        if (saveBtn) saveBtn.style.display = "";
+        if (closeBtn) closeBtn.style.display = "";
+    }
+
+    function renderSettingsForm() {
+        const container = document.getElementById("settings-form");
+        container.innerHTML = "";
+
+        appState.children.forEach((child, i) => {
+            const section = document.createElement("div");
+            section.className = "settings-section";
+
+            const titleLabel = document.createElement("label");
+            titleLabel.innerHTML = "<b>Barns namn</b>";
+            const nameInput = document.createElement("input");
+            nameInput.type = "text";
+            nameInput.id = `name-${i}`;
+            nameInput.value = child.name || "";
+            nameInput.placeholder = "T.ex. Elev A";
+
+            const rssLabel = document.createElement("b");
+            rssLabel.textContent = "RSS (mat):";
+            const rssInput = document.createElement("input");
+            rssInput.type = "text";
+            rssInput.id = `rss-${i}`;
+            rssInput.value = child.rss || "";
+
+            const schemaLabel = document.createElement("b");
+            schemaLabel.textContent = "Schema (JSON):";
+            schemaLabel.style.display = "block";
+            schemaLabel.style.marginTop = "10px";
+
+            const fileInput = document.createElement("input");
+            fileInput.type = "file";
+            fileInput.accept = ".json,application/json";
+            fileInput.id = `import-schema-${i}`;
+            fileInput.style.display = "none";
+            fileInput.addEventListener("change", function () {
+                const f = fileInput.files && fileInput.files[0];
+                if (!f) return;
+                const r = new FileReader();
+                r.onload = function () {
+                    try {
+                        const data = JSON.parse(r.result);
+                        appState.children[i].schema = data;
+                        alert("Schema importerat.");
+                    } catch (e) {
+                        alert("Ogiltig JSON: " + e.message);
+                    }
+                };
+                r.readAsText(f);
+            });
+
+            const importBtn = document.createElement("button");
+            importBtn.type = "button";
+            importBtn.textContent = "Importera schema";
+            importBtn.onclick = () => fileInput.click();
+
+            const exportBtn = document.createElement("button");
+            exportBtn.type = "button";
+            exportBtn.textContent = "Exportera schema";
+            exportBtn.onclick = () => {
+                const blob = new Blob([JSON.stringify(child.schema, null, 2)], { type: "application/json" });
+                const a = document.createElement("a");
+                a.href = URL.createObjectURL(blob);
+                a.download = (child.name || "schema").replace(/\s+/g, "_").toLowerCase() + "_schema.json";
+                a.click();
+                URL.revokeObjectURL(a.href);
+            };
+
+            const btnWrap = document.createElement("div");
+            btnWrap.className = "settings-import-export";
+            btnWrap.appendChild(importBtn);
+            btnWrap.appendChild(exportBtn);
+
+            section.appendChild(titleLabel);
+            section.appendChild(nameInput);
+            section.appendChild(document.createElement("br"));
+            section.appendChild(rssLabel);
+            section.appendChild(rssInput);
+            section.appendChild(schemaLabel);
+            section.appendChild(fileInput);
+            section.appendChild(btnWrap);
+
+            container.appendChild(section);
+        });
+
+        const lovSection = document.createElement("div");
+        lovSection.className = "settings-section";
+        lovSection.innerHTML = "<h3>Lov</h3>";
+        const lovFile = document.createElement("input");
+        lovFile.type = "file";
+        lovFile.accept = ".json,application/json";
+        lovFile.style.display = "none";
+        lovFile.addEventListener("change", function () {
+            const f = lovFile.files && lovFile.files[0];
+            if (!f) return;
+            const r = new FileReader();
+            r.onload = function () {
+                try {
+                    appState.lov = JSON.parse(r.result);
+                    alert("Lov importerat.");
+                } catch (e) {
+                    alert("Ogiltig JSON: " + e.message);
+                }
+            };
+            r.readAsText(f);
+        });
+        const lovWrap = document.createElement("div");
+        lovWrap.className = "settings-import-export";
+        const lovImport = document.createElement("button");
+        lovImport.type = "button";
+        lovImport.textContent = "Importera lov";
+        lovImport.onclick = () => lovFile.click();
+        const lovExport = document.createElement("button");
+        lovExport.type = "button";
+        lovExport.textContent = "Exportera lov";
+        lovExport.onclick = () => {
+            const blob = new Blob([JSON.stringify(appState.lov, null, 2)], { type: "application/json" });
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = "lov_helg.json";
+            a.click();
+            URL.revokeObjectURL(a.href);
+        };
+        lovWrap.appendChild(lovImport);
+        lovWrap.appendChild(lovExport);
+        lovSection.appendChild(lovFile);
+        lovSection.appendChild(lovWrap);
+        container.appendChild(lovSection);
+
+        const termsSection = document.createElement("div");
+        termsSection.className = "settings-section";
+        termsSection.innerHTML = "<h3>Terminer</h3>";
+        const termsFile = document.createElement("input");
+        termsFile.type = "file";
+        termsFile.accept = ".json,application/json";
+        termsFile.style.display = "none";
+        termsFile.addEventListener("change", function () {
+            const f = termsFile.files && termsFile.files[0];
+            if (!f) return;
+            const r = new FileReader();
+            r.onload = function () {
+                try {
+                    appState.terms = JSON.parse(r.result);
+                    alert("Terminer importerade.");
+                } catch (e) {
+                    alert("Ogiltig JSON: " + e.message);
+                }
+            };
+            r.readAsText(f);
+        });
+        const termsWrap = document.createElement("div");
+        termsWrap.className = "settings-import-export";
+        const termsImport = document.createElement("button");
+        termsImport.type = "button";
+        termsImport.textContent = "Importera terminer";
+        termsImport.onclick = () => termsFile.click();
+        const termsExport = document.createElement("button");
+        termsExport.type = "button";
+        termsExport.textContent = "Exportera terminer";
+        termsExport.onclick = () => {
+            const blob = new Blob([JSON.stringify(appState.terms, null, 2)], { type: "application/json" });
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = "termin.json";
+            a.click();
+            URL.revokeObjectURL(a.href);
+        };
+        termsWrap.appendChild(termsImport);
+        termsWrap.appendChild(termsExport);
+        termsSection.appendChild(termsFile);
+        termsSection.appendChild(termsWrap);
+        container.appendChild(termsSection);
+    }
+
+    function saveSettings() {
+        try {
+            appState.children.forEach((c, i) => {
+                const nameEl = document.getElementById(`name-${i}`);
+                const rssEl = document.getElementById(`rss-${i}`);
+                if (nameEl) c.name = nameEl.value.trim() || c.name;
+                if (rssEl) c.rss = rssEl.value.trim();
+            });
+
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+            location.reload();
+        } catch (e) {
+            alert("Kunde inte spara: " + e.message);
+        }
+    }
+
+    function clearFoodCache() {
+        if (confirm("Rensa mat-cache?")) {
+            localStorage.removeItem(FOOD_CACHE_KEY);
+            location.reload();
+        }
+    }
+
+    async function registerServiceWorker() {
+        if (!("serviceWorker" in navigator)) return;
+
+        try {
+            await navigator.serviceWorker.register("./sw.js");
+            console.info("Service worker registrerad.");
+        } catch (e) {
+            console.warn("Service worker kunde inte registreras.", e);
+        }
+    }
+
+    registerServiceWorker();
+    initApp();
+
+    (function initThemePicker() {
+        const sel = document.getElementById("theme-select");
+        if (sel) {
+            sel.addEventListener("change", function () {
+                const v = this.value;
+                localStorage.setItem(THEME_STORAGE_KEY, v);
+                applyTheme(v);
+            });
+        }
+        if (window.matchMedia) {
+            window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", function () {
+                if (getThemePreference() === "system") applyTheme("system");
+            });
+        }
+    })();
+</script>
+
+</body>
+</html>

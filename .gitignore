@@ -1,0 +1,34 @@
+# Dependencies / builds
+node_modules/
+dist/
+build/
+coverage/
+.next/
+out/
+
+# Local environment / secrets
+.env
+.env.*
+*.pem
+*.key
+*.crt
+
+# Editor / OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs / temp / backups
+*.log
+*.tmp
+*.bak
+*.swp
+*.swo
+*.orig
+*.rej
+
+# PWA/runtime caches (if any)
+workbox-*.js
+*.cache
+

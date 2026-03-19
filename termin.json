@@ -1,0 +1,12 @@
+[
+  {
+    "termin": "Vårterminen 2026 (exempel)",
+    "skolstart": [{ "datum": "2026-01-12", "beskrivning": "Exempel: vårterminens första skoldag" }],
+    "skolavslutning": [{ "datum": "2026-06-11", "beskrivning": "Exempel: vårterminens sista skoldag" }]
+  },
+  {
+    "termin": "Höstterminen 2026 (exempel)",
+    "skolstart": [{ "datum": "2026-08-18", "beskrivning": "Exempel: höstterminens första skoldag" }],
+    "skolavslutning": [{ "datum": "2026-12-18", "beskrivning": "Exempel: höstterminens sista skoldag" }]
+  }
+]
