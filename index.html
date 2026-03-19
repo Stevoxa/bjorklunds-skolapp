@@ -705,24 +705,67 @@
 ]</pre>
 
             <h4 style="margin-top:14px;">4) Paket (t.ex. <code>skolapp-bundle.json</code>)</h4>
+            <div style="font-size:0.75rem; color: var(--muted-text); margin-top:6px; margin-bottom:8px;">
+                Exemplet nedan är <b>annoterat</b> (med kommentarer). <b>Importen kräver giltig JSON utan kommentarerna</b>
+                (dvs ta bort `// ...` rader innan import). Använd gärna knappen nedan för att ladda ner en importbar mall.
+            </div>
             <pre class="help-code">{
-  "bundleVersion": 1,
-  "appVersion": "v51",
-  "children": [
+  "bundleVersion": 1,                // paketversion (metadata)
+  "appVersion": "v51",             // metadata (matchar din appversion)
+
+  "children": [                    // barn (i appen = samma som "Elev A/B")
     {
-      "id": "elev_a",
-      "name": "Elev A",
-      "rss": "",
+      "id": "elev_a",             // valfritt men rekommenderas (stabil identifierare)
+      "name": "Elev A",          // visas i UI
+      "rss": "https://...",     // RSS-länk för matsedel (används av matsedel-funktionen)
+
       "schema": {
-        "schema": []
+        "schema": [
+          {
+            "dag": "Måndag",      // måste matcha svensk veckodag (t.ex. "Måndag", "Tisdag"...)
+            "lektioner": [
+              {
+                "tid": "09.00-10.00",     // format: "HH.MM-HH.MM" eller "HH:MM-HH:MM"
+                "ämne": "Matematik (Sal A1)", // text som visas; "Sal" plockas ur parentes
+                "lärare": "Lärare Exempel 1"   // valfritt, kan utelämnas
+              }
+            ]
+          }
+        ]
       }
     }
   ],
+
   "lov": {
-    "lov": [],
-    "helgdagar": []
+    "lov": [
+      {
+        "datum": "2026-02-23",  // format: YYYY-MM-DD (matchas mot visat datum)
+        "vecka": 9,              // metadata (appens logik använder främst "datum")
+        "dag": "Måndag",         // metadata
+        "beskrivning": "Lov-text" // visas i appen
+      }
+    ],
+    "helgdagar": [
+      {
+        "datum": "2026-04-03",
+        "vecka": 14,
+        "dag": "Fredag",
+        "beskrivning": "Helgdag-text"
+      }
+    ]
   },
-  "terms": []
+
+  "terms": [
+    {
+      "termin": "Vårterminen 2026", // metadata
+      "skolstart": [
+        { "datum": "2026-01-12", "beskrivning": "Skolstart-text" }
+      ],
+      "skolavslutning": [
+        { "datum": "2026-06-11", "beskrivning": "Skolavslutning-text" }
+      ]
+    }
+  ]
 }</pre>
 
             <button type="button" onclick="downloadEmptyBundleTemplate()" class="settings-btn" style="margin-top:12px;">
