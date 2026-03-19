@@ -749,8 +749,8 @@
     const THEME_STORAGE_KEY = "bjorklundskolapp_theme";
     const storage = localStorage;
     const DEFAULT_CHILDREN = [
-        { name: "Elev A", file: "schema_elev_a.json", rss: "https://example.com/rss/week/elev-a?locale=sv" },
-        { name: "Elev B", file: "schema_elev_b.json", rss: "https://example.com/rss/week/elev-b?locale=sv" }
+        { id: "elev_a", name: "Elev A", file: "schema_elev_a.json", rss: "https://example.com/rss/week/elev-a?locale=sv" },
+        { id: "elev_b", name: "Elev B", file: "schema_elev_b.json", rss: "https://example.com/rss/week/elev-b?locale=sv" }
     ];
 
     let activeDate = new Date();
@@ -938,6 +938,93 @@
         };
     }
 
+    function getChildIdForBundle(child, idx) {
+        const rawId = (child && typeof child.id === "string") ? child.id.trim() : "";
+        if (rawId) return rawId;
+        const rawName = (child && typeof child.name === "string") ? child.name.trim() : "";
+        if (rawName) return rawName.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_\-]+/g, "");
+        return `child_${idx + 1}`;
+    }
+
+    function createBundleFromAppState() {
+        if (!appState || !Array.isArray(appState.children)) {
+            throw new Error("Appdata saknas - kan inte exportera paket.");
+        }
+
+        return {
+            bundleVersion: 1,
+            appVersion: APP_VERSION,
+            children: appState.children.map((c, idx) => ({
+                id: getChildIdForBundle(c, idx),
+                name: c.name || "",
+                rss: c.rss || "",
+                schema: c.schema
+            })),
+            lov: appState.lov || { lov: [], helgdagar: [] },
+            terms: Array.isArray(appState.terms) ? appState.terms : []
+        };
+    }
+
+    function validateAndNormalizeBundle(bundle) {
+        if (!bundle || typeof bundle !== "object") {
+            throw new Error("Bundle är inte ett JSON-objekt.");
+        }
+
+        if (!Array.isArray(bundle.children) || bundle.children.length === 0) {
+            throw new Error('Bundle saknar "children" (minst ett barn).');
+        }
+
+        const normalizedChildren = bundle.children.map((c, idx) => {
+            if (!c || typeof c !== "object") {
+                throw new Error(`Barn #${idx + 1} är inte ett objekt.`);
+            }
+            const name = String(c.name ?? "").trim();
+            if (!name) throw new Error(`Barn #${idx + 1} saknar "name".`);
+
+            const rss = String(c.rss ?? "").trim();
+
+            const schema = c.schema;
+            if (!schema || typeof schema !== "object") {
+                throw new Error(`Barn "${name}" saknar "schema" (objekt).`);
+            }
+
+            const id = (typeof c.id === "string" && c.id.trim()) ? c.id.trim() : getChildIdForBundle({ name }, idx);
+            return { id, name, rss, schema };
+        });
+
+        const lovIn = bundle.lov || {};
+        const lovList = Array.isArray(lovIn.lov) ? lovIn.lov : [];
+        const helgdagarList = Array.isArray(lovIn.helgdagar) ? lovIn.helgdagar : [];
+        const lov = { lov: lovList, helgdagar: helgdagarList };
+
+        const terms = Array.isArray(bundle.terms) ? bundle.terms : [];
+
+        return {
+            children: normalizedChildren,
+            lov,
+            terms
+        };
+    }
+
+    function applyImportedBundle(bundle) {
+        const normalized = validateAndNormalizeBundle(bundle);
+        // Rensa gammalt app-innehåll (schema/lov/termin + mat-cache).
+        storage.removeItem(STORAGE_KEY);
+        storage.removeItem(FOOD_CACHE_KEY);
+        storage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+
+        appState = normalized;
+        renderApp();
+        startOngoingRefresh();
+
+        // Om andra vyer fortfarande är synliga så uppdatera dem också.
+        const foodView = document.getElementById("food-week-view");
+        if (foodView && foodView.style.display === "block") renderFoodWeekView();
+        const calendarView = document.getElementById("calendar-view");
+        if (calendarView && calendarView.style.display === "block") renderCalendarView();
+        if (scheduleViewOpen) renderScheduleView();
+    }
+
     // Remove legacy persisted keys (old app versions).
     // This ensures "old" localStorage entries don't keep showing up.
     function purgeLegacyLocalStorage() {
@@ -1041,6 +1128,7 @@
 
         return {
             children: DEFAULT_CHILDREN.map((child, index) => ({
+                id: child.id,
                 name: child.name,
                 schema: childSchemas[index],
                 rss: child.rss
@@ -1885,6 +1973,80 @@
     function renderSettingsForm() {
         const container = document.getElementById("settings-form");
         container.innerHTML = "";
+
+        const bundleSection = document.createElement("div");
+        bundleSection.className = "settings-section";
+
+        const bundleTitle = document.createElement("h3");
+        bundleTitle.textContent = "Paket (import/export)";
+
+        const bundleHint = document.createElement("div");
+        bundleHint.style.fontSize = "0.75rem";
+        bundleHint.style.color = "var(--muted-text)";
+        bundleHint.style.marginTop = "6px";
+        bundleHint.style.marginBottom = "10px";
+        bundleHint.textContent = "Import ersätter all app-data (schema + RSS, lov och terminer).";
+
+        const bundleFile = document.createElement("input");
+        bundleFile.type = "file";
+        bundleFile.accept = ".json,application/json";
+        bundleFile.style.display = "none";
+
+        bundleFile.addEventListener("change", function () {
+            const f = bundleFile.files && bundleFile.files[0];
+            if (!f) return;
+
+            const r = new FileReader();
+            r.onload = function () {
+                try {
+                    const parsed = JSON.parse(r.result);
+                    if (!confirm("Importera paket? Detta ersätter all app-data.")) return;
+                    applyImportedBundle(parsed);
+                    renderSettingsForm(); // uppdatera UI för ev. ändrat antal barn
+                    alert("Paket importerat.");
+                } catch (e) {
+                    alert("Ogiltigt paket: " + (e && e.message ? e.message : String(e)));
+                } finally {
+                    // reset så samma fil kan importeras igen om man vill
+                    bundleFile.value = "";
+                }
+            };
+            r.readAsText(f);
+        });
+
+        const bundleWrap = document.createElement("div");
+        bundleWrap.className = "settings-import-export";
+
+        const bundleImportBtn = document.createElement("button");
+        bundleImportBtn.type = "button";
+        bundleImportBtn.textContent = "Importera paket";
+        bundleImportBtn.onclick = () => bundleFile.click();
+
+        const bundleExportBtn = document.createElement("button");
+        bundleExportBtn.type = "button";
+        bundleExportBtn.textContent = "Exportera paket";
+        bundleExportBtn.onclick = () => {
+            try {
+                const bundle = createBundleFromAppState();
+                const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
+                const a = document.createElement("a");
+                a.href = URL.createObjectURL(blob);
+                a.download = "skolapp-bundle.json";
+                a.click();
+                URL.revokeObjectURL(a.href);
+            } catch (e) {
+                alert("Kunde inte exportera: " + (e && e.message ? e.message : String(e)));
+            }
+        };
+
+        bundleWrap.appendChild(bundleImportBtn);
+        bundleWrap.appendChild(bundleExportBtn);
+
+        bundleSection.appendChild(bundleTitle);
+        bundleSection.appendChild(bundleHint);
+        bundleSection.appendChild(bundleFile);
+        bundleSection.appendChild(bundleWrap);
+        container.appendChild(bundleSection);
 
         appState.children.forEach((child, i) => {
             const section = document.createElement("div");
