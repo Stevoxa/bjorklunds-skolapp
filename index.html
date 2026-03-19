@@ -742,11 +742,12 @@
 
 <script>
     const APP_VERSION = "v51";
-    // Use sessionStorage so we don't persist user/app state across browser restarts.
-    const STORAGE_KEY = `bjorklunds_session_${APP_VERSION}`;
-    const FOOD_CACHE_KEY = "food_cache_session";
-    const THEME_STORAGE_KEY = "bjorklunds_theme_session";
-    const storage = sessionStorage;
+    // Use localStorage for persistence (like before), but with new key names
+    // so any old cached data won't be reused.
+    const STORAGE_KEY = `bjorklundskolapp_store_${APP_VERSION}`;
+    const FOOD_CACHE_KEY = "bjorklundskolapp_food_cache";
+    const THEME_STORAGE_KEY = "bjorklundskolapp_theme";
+    const storage = localStorage;
     const DEFAULT_CHILDREN = [
         { name: "Elev A", file: "schema_elev_a.json", rss: "https://example.com/rss/week/elev-a?locale=sv" },
         { name: "Elev B", file: "schema_elev_b.json", rss: "https://example.com/rss/week/elev-b?locale=sv" }
@@ -943,6 +944,7 @@
         try {
             const legacyExactKeys = [
                 "bjorklund-skolapp-store-1",
+                "bjorklunds_skolapp-store-1",
                 "bjorklunds_theme",
                 "food_cache"
             ];
@@ -952,6 +954,8 @@
             }
 
             // Older schema/terms/lov used bjorklunds_*.
+            // Remove them so the app will rebuild from JSON on next load.
+            // (New keys do NOT start with "bjorklunds_", so they are safe.)
             for (let i = localStorage.length - 1; i >= 0; i--) {
                 const key = localStorage.key(i);
                 if (!key) continue;
