@@ -632,6 +632,16 @@
             text-decoration: underline;
         }
 
+        .calendar-event-card.past {
+            border-left-color: #d1d5db; /* neutral grå kant */
+            background: var(--muted-bg);
+        }
+
+        .calendar-event-card.past .calendar-event-date,
+        .calendar-event-card.past .calendar-event-desc {
+            color: var(--muted-text);
+        }
+
         .schedule-close-btn {
             background: var(--accent);
             color: #fff;
@@ -2100,12 +2110,15 @@
             contentEl.innerHTML = "<p>Inga händelser sparade.</p>";
             return;
         }
+        const todayStr = getLocalDateStr(new Date());
         const parts = [];
         let lastWeek = null;
         events.forEach(e => {
             const typeClass = e.type === "helgdag" ? "helgdag" : e.type === "lov" ? "lov" : "";
             let w;
             let dateLabel;
+            const compareEndDate = e.endDate || e.date || "";
+            const isPast = compareEndDate ? (compareEndDate < todayStr) : false;
             if (e.startDate && e.endDate) {
                 w = getWeek(new Date(e.startDate + "T12:00:00"));
                 dateLabel = e.startDate === e.endDate ? e.startDate : `${e.startDate}-${e.endDate}`;
@@ -2117,7 +2130,8 @@
                 parts.push(`<div class="calendar-week-label">Vecka ${w}</div>`);
                 lastWeek = w;
             }
-            parts.push(`<div class="calendar-event-card ${typeClass}"><div class="calendar-event-date">${escapeHtml(dateLabel)}</div><div class="calendar-event-desc">${escapeHtml(e.label)}</div></div>`);
+            const pastClass = isPast ? " past" : "";
+            parts.push(`<div class="calendar-event-card ${typeClass}${pastClass}"><div class="calendar-event-date">${escapeHtml(dateLabel)}</div><div class="calendar-event-desc">${escapeHtml(e.label)}</div></div>`);
         });
         contentEl.innerHTML = parts.join("");
     }
@@ -2201,6 +2215,20 @@
         const parts = [];
         (Array.isArray(appState.children) ? appState.children : []).forEach((child, idx) => {
             const contacts = Array.isArray(child.contacts) ? child.contacts : [];
+            const contactsSorted = [...contacts].sort((a, b) => {
+                const an = (a && a.name) ? String(a.name).trim() : "";
+                const bn = (b && b.name) ? String(b.name).trim() : "";
+                const afn = an ? an.split(/\s+/)[0] : "";
+                const bfn = bn ? bn.split(/\s+/)[0] : "";
+
+                const aKey = afn.toLocaleLowerCase("sv-SE");
+                const bKey = bfn.toLocaleLowerCase("sv-SE");
+
+                const byFirst = aKey.localeCompare(bKey, "sv-SE");
+                if (byFirst !== 0) return byFirst;
+
+                return an.toLocaleLowerCase("sv-SE").localeCompare(bn.toLocaleLowerCase("sv-SE"), "sv-SE");
+            });
             const isActive = contactsViewChildIndex === idx;
             const activeClass = isActive ? " contacts-child-card-active" : "";
 
@@ -2209,9 +2237,9 @@
             parts.push(
                 `<div class="contacts-child-card${activeClass}" id="contacts-child-${idx}">` +
                 `<div class="contacts-child-name">${childName}</div>` +
-                (contacts.length === 0
+                (contactsSorted.length === 0
                     ? `<div class="contacts-empty">Saknar kontakter sparade.</div>`
-                    : contacts.map((c) => {
+                    : contactsSorted.map((c) => {
                         const name = (c && c.name) ? escapeHtml(c.name) : "Okänd";
                         const email = c && c.email ? String(c.email).trim() : "";
                         const mobile = c && c.mobile ? String(c.mobile).trim() : "";
