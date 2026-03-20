@@ -1886,19 +1886,15 @@
         withBreaks = withBreaks.replace(/,\s*(<br\s*\/?>)/gi, `.<br>`);
 
         // If the final character isn't sentence-ending punctuation, add a dot.
-        // We try to ignore trailing quotes/brackets.
+        // Important: for cases like "...)" we want ")." (dot after parenthesis), not ".)".
+        const trailingBr = withBreaks.match(/(<br\s*\/?>)+$/i);
         let trimmed = withBreaks.trim();
         if (trimmed) {
-            // Strip any trailing <br> tags so we only look at the actual last text char.
+            // Remove trailing <br> tags for the punctuation check.
             trimmed = trimmed.replace(/(<br\s*\/?>)+$/gi, "");
-
-            const m = trimmed.match(/^(.*?)(['")\]\}]+)?$/);
-            const core = (m && m[1]) ? m[1] : trimmed;
-            const suffix = (m && m[2]) ? m[2] : "";
-
-            const lastChar = core.slice(-1);
-            if (!/[.!?…]$/.test(lastChar)) {
-                withBreaks = core + "." + suffix;
+            if (trimmed && !/[.!?…]$/.test(trimmed.slice(-1))) {
+                // Add dot after the last real character, then re-attach any trailing <br>.
+                withBreaks = trimmed + "." + (trailingBr ? trailingBr[0] : "");
             }
         }
 
