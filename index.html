@@ -715,6 +715,17 @@
         .calendar-event-card.helgdag { border-left-color: var(--holiday); }
         .calendar-event-card.lov { border-left-color: #e67e22; }
 
+        /* Must come after .helgdag/.lov so past styling isn't overridden. */
+        .calendar-event-card.past {
+            border-left-color: #d1d5db !important;
+            background: var(--muted-bg) !important;
+        }
+
+        .calendar-event-card.past .calendar-event-date,
+        .calendar-event-card.past .calendar-event-desc {
+            color: var(--muted-text) !important;
+        }
+
         .calendar-event-date {
             font-weight: 700;
             font-size: 0.9rem;
@@ -1863,9 +1874,33 @@
     }
 
     function sanitizeFoodHtml(food) {
-        const withBreaks = String(food || "")
+        let withBreaks = String(food || "")
+            // Some feeds return "<br>" escaped as "&lt;br&gt;".
             .replace(/&lt;br\s*\/?&gt;/gi, "<br>")
+            // Also handle odd RSS variants like "</BR>".
+            .replace(/<\/br\s*>/gi, "<br>")
             .replace(/<br\s*\/?>/gi, "<br>");
+
+        // If a comma is followed by a line break in the RSS text, users expect a full stop.
+        // Example: ",<br>" or ", </BR>" -> ".<br>"
+        withBreaks = withBreaks.replace(/,\s*(<br\s*\/?>)/gi, `.<br>`);
+
+        // If the final character isn't sentence-ending punctuation, add a dot.
+        // We try to ignore trailing quotes/brackets.
+        let trimmed = withBreaks.trim();
+        if (trimmed) {
+            // Strip any trailing <br> tags so we only look at the actual last text char.
+            trimmed = trimmed.replace(/(<br\s*\/?>)+$/gi, "");
+
+            const m = trimmed.match(/^(.*?)(['")\]\}]+)?$/);
+            const core = (m && m[1]) ? m[1] : trimmed;
+            const suffix = (m && m[2]) ? m[2] : "";
+
+            const lastChar = core.slice(-1);
+            if (!/[.!?…]$/.test(lastChar)) {
+                withBreaks = core + "." + suffix;
+            }
+        }
 
         const parts = withBreaks.split(/<br\s*\/?>/i);
         const escapedParts = parts.map(part => escapeHtml(part));
@@ -2110,15 +2145,26 @@
             contentEl.innerHTML = "<p>Inga händelser sparade.</p>";
             return;
         }
-        const todayStr = getLocalDateStr(new Date());
+        const todayNoon = new Date();
+        todayNoon.setHours(12, 0, 0, 0);
         const parts = [];
         let lastWeek = null;
         events.forEach(e => {
             const typeClass = e.type === "helgdag" ? "helgdag" : e.type === "lov" ? "lov" : "";
             let w;
             let dateLabel;
-            const compareEndDate = e.endDate || e.date || "";
-            const isPast = compareEndDate ? (compareEndDate < todayStr) : false;
+            const endStr = e.endDate || e.date || "";
+            let isPast = false;
+            if (endStr) {
+                // endStr/date are in YYYY-MM-DD from JSON/bundle logic.
+                if (/^\d{4}-\d{2}-\d{2}$/.test(endStr)) {
+                    const endNoon = new Date(endStr + "T12:00:00");
+                    isPast = endNoon.getTime() < todayNoon.getTime();
+                } else {
+                    // Fallback: keep old behavior.
+                    isPast = String(endStr) < getLocalDateStr(new Date());
+                }
+            }
             if (e.startDate && e.endDate) {
                 w = getWeek(new Date(e.startDate + "T12:00:00"));
                 dateLabel = e.startDate === e.endDate ? e.startDate : `${e.startDate}-${e.endDate}`;
