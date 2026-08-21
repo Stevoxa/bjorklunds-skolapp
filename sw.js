@@ -1,7 +1,10 @@
 /* eslint-disable no-restricted-globals */
 // Simple service worker for offline support on a static PWA.
 
-const CACHE_VERSION = "v4";
+// Cache-namnet följer appens version. index.html registrerar sig som "./sw.js?v=<APP_VERSION>",
+// så en bumpad APP_VERSION ger både en ny SW-fil (byte-skillnad = install körs) och en ny cache.
+// Fallback finns för det fall registreringen sker utan query-sträng.
+const CACHE_VERSION = new URL(self.location.href).searchParams.get("v") || "v0";
 const STATIC_CACHE = `bjorklunds-static-${CACHE_VERSION}`;
 
 // Keep this list tight; JSON is also cached but can be refreshed.
@@ -21,7 +24,12 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     (async () => {
       const cache = await caches.open(STATIC_CACHE);
-      await cache.addAll(PRECACHE_URLS);
+      // "reload" förbi HTTP-cachen, annars kan en ny version precacha gamla filer.
+      try {
+        await cache.addAll(PRECACHE_URLS.map((url) => new Request(url, { cache: "reload" })));
+      } catch {
+        await cache.addAll(PRECACHE_URLS);
+      }
       await self.skipWaiting();
     })()
   );

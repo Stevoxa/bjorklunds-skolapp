@@ -25,6 +25,17 @@
             --overlay-bg: #ffffff;
             --settings-section-bg: #f9f9f9;
             --btn-secondary-bg: #f5f5f5;
+            /* "Pågående/Nästa lektion"-rutan. Sätts som variabler så att JS slipper
+               skriva hårdkodade färger inline (som annars överlever temabytet). */
+            --ongoing-bg: #eef9f1;
+            --ongoing-border: #c3e6cb;
+            --ongoing-press-bg: #e0f3e6;
+            --ongoing-text: #333;
+            --ongoing-empty-bg: #e9ecef;
+            --ongoing-empty-border: #6c757d;
+            --ongoing-empty-text: #495057;
+            --ongoing-empty-subject: #212529;
+            --ongoing-muted-label: #6c757d;
             /* Extra padding för bottenmeny när Android-systemnavigeringen täcker innehåll. */
             --controls-bottom-pad: 0px;
         }
@@ -43,6 +54,15 @@
             --overlay-bg: #25282c;
             --settings-section-bg: #2d3238;
             --btn-secondary-bg: #3d4248;
+            --ongoing-bg: #24352d;
+            --ongoing-border: #3a5348;
+            --ongoing-press-bg: #2c4036;
+            --ongoing-text: #e4e6eb;
+            --ongoing-empty-bg: #2d3238;
+            --ongoing-empty-border: #8b9cb3;
+            --ongoing-empty-text: #cbd2d9;
+            --ongoing-empty-subject: #e4e6eb;
+            --ongoing-muted-label: #9ca3af;
         }
 
         * {
@@ -170,8 +190,9 @@
         }
 
         .ongoing {
-            background: #eef9f1;
-            border: 1px solid #c3e6cb;
+            background: var(--ongoing-bg);
+            border: 1px solid var(--ongoing-border);
+            color: var(--ongoing-text);
             border-left-width: 4px;
             padding: 8px 10px;
             border-radius: 6px;
@@ -184,7 +205,7 @@
 
         .ongoing:active {
             transform: scale(0.98);
-            background: #e0f3e6;
+            background: var(--ongoing-press-bg);
         }
 
         .ongoing-label {
@@ -196,7 +217,7 @@
         }
 
         .ongoing-label-muted {
-            color: #6c757d;
+            color: var(--ongoing-muted-label);
         }
 
         .ongoing-subject {
@@ -219,13 +240,14 @@
         }
 
         .ongoing.ongoing-empty {
-            background: #e9ecef;
-            border-left: 4px solid #6c757d;
-            border-left-color: #6c757d;
+            background: var(--ongoing-empty-bg);
+            color: var(--ongoing-empty-text);
+            border-color: transparent;
+            border-left: 4px solid var(--ongoing-empty-border);
         }
 
         .ongoing-empty .ongoing-subject {
-            color: #212529;
+            color: var(--ongoing-empty-subject);
         }
 
         .msg-box {
@@ -355,6 +377,8 @@
             text-align: center;
             display: flex;
             justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
             background: var(--card-bg);
             border-top: 1px solid var(--muted-border);
             flex-shrink: 0;
@@ -632,16 +656,6 @@
             text-decoration: underline;
         }
 
-        .calendar-event-card.past {
-            border-left-color: #d1d5db; /* neutral grå kant */
-            background: var(--muted-bg);
-        }
-
-        .calendar-event-card.past .calendar-event-date,
-        .calendar-event-card.past .calendar-event-desc {
-            color: var(--muted-text);
-        }
-
         .schedule-close-btn {
             background: var(--accent);
             color: #fff;
@@ -652,11 +666,6 @@
             font-weight: bold;
             margin-top: 8px;
             cursor: pointer;
-        }
-
-        .controls {
-            gap: 10px;
-            flex-wrap: wrap;
         }
 
         .controls-btn-icon {
@@ -745,6 +754,45 @@
         }
         .calendar-week-label:first-child {
             margin-top: 0;
+        }
+
+        .app-toast {
+            position: fixed;
+            left: 12px;
+            right: 12px;
+            bottom: calc(12px + env(safe-area-inset-bottom) + var(--controls-bottom-pad));
+            z-index: 2000;
+            padding: 12px;
+            border-radius: 12px;
+            background: rgba(0,0,0,0.78);
+            color: #fff;
+            text-align: center;
+        }
+
+        .app-toast-title {
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .app-toast-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .app-toast-btn {
+            padding: 10px 14px;
+            border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.35);
+            background: transparent;
+            color: #fff;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .app-toast-btn-primary {
+            border-color: transparent;
+            background: #27ae60;
         }
     </style>
 </head>
@@ -1030,6 +1078,11 @@
     const FOOD_CACHE_KEY = "bjorklundskolapp_food_cache";
     const THEME_STORAGE_KEY = "bjorklundskolapp_theme";
     const storage = localStorage;
+
+    // Var appState kommer ifrån. "seed" = de JSON-filer som ligger i appen och som får
+    // uppdateras i bakgrunden; "custom" = användarens egen import, som aldrig rörs.
+    const SOURCE_SEED = "seed";
+    const SOURCE_CUSTOM = "custom";
     const DEFAULT_CHILDREN = [
         // Default: ingen RSS så att appen inte försöker hämta "example" och spammar felmeddelanden.
         { id: "elev_a", name: "Elev A", file: "schema_elev_a.json", rss: "" },
@@ -1228,10 +1281,49 @@
 
     function getDefaultAppState() {
         return {
+            source: SOURCE_SEED,
             children: [],
             lov: { lov: [], helgdagar: [] },
             terms: []
         };
+    }
+
+    // Skriver appState till localStorage. Returnerar false (och larmar) om det inte gick,
+    // så anropare slipper tro att något sparades när kvoten är full.
+    function persistAppState() {
+        try {
+            storage.setItem(STORAGE_KEY, JSON.stringify(appState));
+            return true;
+        } catch (e) {
+            alert("Kunde inte spara data: " + (e && e.message ? e.message : String(e)));
+            return false;
+        }
+    }
+
+    // Plockar in namn/RSS från inställningsformuläret i appState. Bryts ut ur saveSettings()
+    // så att en import mitt i formuläret inte slänger det användaren just skrivit.
+    function collectSettingsInputs() {
+        if (!appState || !Array.isArray(appState.children)) return;
+        appState.children.forEach((c, i) => {
+            const nameEl = document.getElementById(`name-${i}`);
+            const rssEl = document.getElementById(`rss-${i}`);
+            if (nameEl) c.name = nameEl.value.trim() || c.name;
+            if (rssEl) c.rss = rssEl.value.trim();
+        });
+    }
+
+    // Gemensam avslutning för alla delimporter i inställningarna: ta med formulärfälten,
+    // markera datan som egen (så seed-uppdateringar inte skriver över den), spara och rita om.
+    function commitPartialImport(successMessage) {
+        collectSettingsInputs();
+        appState.source = SOURCE_CUSTOM;
+        if (!persistAppState()) return;
+
+        renderApp();
+        if (scheduleViewOpen) renderScheduleView();
+        if (contactsViewOpen) renderContactsView();
+        renderSettingsForm();
+        alert(successMessage);
     }
 
     function getChildIdForBundle(child, idx) {
@@ -1314,6 +1406,8 @@
         const terms = Array.isArray(bundle.terms) ? bundle.terms : [];
 
         return {
+            // Importerad data är användarens egen och ska aldrig ersättas av seed-filerna.
+            source: SOURCE_CUSTOM,
             children: normalizedChildren,
             lov,
             terms
@@ -1483,6 +1577,7 @@
         const terms = await fetchJsonFile("termin.json");
 
         return {
+            source: SOURCE_SEED,
             children: DEFAULT_CHILDREN.map((child, index) => ({
                 id: child.id,
                 name: child.name,
@@ -1493,6 +1588,58 @@
             lov,
             terms
         };
+    }
+
+    // Hämtar om de medföljande JSON-filerna och uppdaterar schema/lov/terminer.
+    // Körs bara när appState fortfarande kommer från appens egen data (source === "seed"),
+    // så en importerad bundle aldrig skrivs över. Namn, RSS och kontakter som användaren
+    // ändrat i inställningarna behålls.
+    async function refreshSeedData() {
+        if (!appState || appState.source !== SOURCE_SEED) return;
+
+        let fresh;
+        try {
+            fresh = await loadRemoteAppState();
+        } catch (e) {
+            console.info("Kunde inte uppdatera medföljande data (offline?).", e);
+            return;
+        }
+
+        const before = JSON.stringify({
+            children: appState.children.map(c => c.schema),
+            lov: appState.lov,
+            terms: appState.terms
+        });
+
+        const merged = {
+            ...appState,
+            source: SOURCE_SEED,
+            children: fresh.children.map((fc) => {
+                const existing = appState.children.find(c => c.id === fc.id);
+                if (!existing) return fc;
+                return {
+                    ...fc,
+                    name: existing.name || fc.name,
+                    rss: existing.rss || fc.rss,
+                    contacts: Array.isArray(existing.contacts) ? existing.contacts : []
+                };
+            }),
+            lov: fresh.lov,
+            terms: fresh.terms
+        };
+
+        const after = JSON.stringify({
+            children: merged.children.map(c => c.schema),
+            lov: merged.lov,
+            terms: merged.terms
+        });
+
+        if (before === after) return;
+
+        appState = merged;
+        persistAppState();
+        renderApp();
+        console.info("Medföljande schema/lov/terminer uppdaterade.");
     }
 
     async function initApp() {
@@ -1522,6 +1669,12 @@
                             if (!Array.isArray(ch.contacts)) ch.contacts = [];
                         });
                     }
+                    // Sparad data från tidigare versioner saknar "source". Vi vet inte om den
+                    // kommer från appens filer eller en import, så vi antar det säkra:
+                    // behandla den som egen data och rör den inte.
+                    if (parsed.source !== SOURCE_SEED && parsed.source !== SOURCE_CUSTOM) {
+                        parsed.source = SOURCE_CUSTOM;
+                    }
                     appState = parsed;
                     loadedFromStorage = true;
                 }
@@ -1543,6 +1696,9 @@
 
         renderApp();
         startOngoingRefresh();
+
+        // Ritar redan färdigt ovan; uppdateringen av medföljande data får ske i bakgrunden.
+        if (loadedFromStorage) refreshSeedData();
     }
 
     function changeDate(dir) {
@@ -1763,30 +1919,24 @@
 
         el.innerHTML = currHtml;
 
-        if (isToday && !activeLessonForColor && currHtml.includes("Nästa lektion:")) {
-            el.classList.add("ongoing-empty");
-            el.style.background = "#e9ecef";
-            el.style.borderColor = "transparent";
-            el.style.borderLeftColor = "#6c757d";
-            el.style.borderLeftWidth = "4px";
-            el.style.color = "#495057";
-        } else if (!isToday || (isToday && !currHtml.includes("Pågående:"))) {
-            // Empty/summary states
-            el.classList.add("ongoing-empty");
-            el.style.background = "#e9ecef";
-            el.style.borderColor = "transparent";
-            el.style.borderLeftColor = "#6c757d";
-            el.style.borderLeftWidth = "4px";
-            el.style.color = "#495057";
-        } else {
+        if (activeLessonForColor) {
+            // Pågående lektion: bara ämnesfärgen är dynamisk, textfärgen sköts av CSS
+            // så att den följer temat.
             el.classList.remove("ongoing-empty");
-            const color = getSubjectColor(activeLessonForColor?.ämne);
-            const bg = getLessonBackgroundColor(activeLessonForColor?.ämne);
-            el.style.background = bg;
+            el.style.background = getLessonBackgroundColor(activeLessonForColor.ämne);
             el.style.borderColor = "transparent";
-            el.style.borderLeftColor = color;
+            el.style.borderLeftColor = getSubjectColor(activeLessonForColor.ämne);
             el.style.borderLeftWidth = "4px";
-            el.style.color = "#333";
+            el.style.color = "";
+        } else {
+            // Tomma/sammanfattande lägen: nolla inline-stilarna och låt
+            // .ongoing-empty med sina temavariabler bestämma färgerna.
+            el.classList.add("ongoing-empty");
+            el.style.background = "";
+            el.style.borderColor = "";
+            el.style.borderLeftColor = "";
+            el.style.borderLeftWidth = "";
+            el.style.color = "";
         }
     }
 
@@ -2663,8 +2813,11 @@
                 r.onload = function () {
                     try {
                         const data = JSON.parse(r.result);
+                        if (!data || typeof data !== "object") {
+                            throw new Error("Schemat måste vara ett JSON-objekt eller en array.");
+                        }
                         appState.children[i].schema = data;
-                        alert("Schema importerat.");
+                        commitPartialImport("Schema importerat och sparat.");
                     } catch (e) {
                         alert("Ogiltig JSON: " + e.message);
                     }
@@ -2719,8 +2872,15 @@
             const r = new FileReader();
             r.onload = function () {
                 try {
-                    appState.lov = JSON.parse(r.result);
-                    alert("Lov importerat.");
+                    const parsed = JSON.parse(r.result);
+                    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+                        throw new Error('Lov måste vara ett objekt med "lov" och/eller "helgdagar".');
+                    }
+                    appState.lov = {
+                        lov: Array.isArray(parsed.lov) ? parsed.lov : [],
+                        helgdagar: Array.isArray(parsed.helgdagar) ? parsed.helgdagar : []
+                    };
+                    commitPartialImport("Lov importerat och sparat.");
                 } catch (e) {
                     alert("Ogiltig JSON: " + e.message);
                 }
@@ -2763,8 +2923,12 @@
             const r = new FileReader();
             r.onload = function () {
                 try {
-                    appState.terms = JSON.parse(r.result);
-                    alert("Terminer importerade.");
+                    const parsed = JSON.parse(r.result);
+                    if (!Array.isArray(parsed)) {
+                        throw new Error("Terminer måste vara en JSON-array.");
+                    }
+                    appState.terms = parsed;
+                    commitPartialImport("Terminer importerade och sparade.");
                 } catch (e) {
                     alert("Ogiltig JSON: " + e.message);
                 }
@@ -2834,7 +2998,7 @@
                             };
                         });
                         appState.children[i].contacts = normalized;
-                        alert("Kontaktlista importerad för " + (child.name || `barn ${i + 1}`) + ".");
+                        commitPartialImport("Kontaktlista importerad och sparad för " + (appState.children[i].name || `barn ${i + 1}`) + ".");
                     } catch (e) {
                         alert("Ogiltig JSON: " + e.message);
                     }
@@ -2884,13 +3048,7 @@
 
     function saveSettings() {
         try {
-            appState.children.forEach((c, i) => {
-                const nameEl = document.getElementById(`name-${i}`);
-                const rssEl = document.getElementById(`rss-${i}`);
-                if (nameEl) c.name = nameEl.value.trim() || c.name;
-                if (rssEl) c.rss = rssEl.value.trim();
-            });
-
+            collectSettingsInputs();
             storage.setItem(STORAGE_KEY, JSON.stringify(appState));
             location.reload();
         } catch (e) {
@@ -2905,11 +3063,44 @@
         }
     }
 
+    // Navigeringar serveras stale-while-revalidate, så en ny version syns först vid nästa
+    // laddning. Istället för att låta användaren gå på gammal kod visar vi en ruta när den
+    // nya service workern tagit över.
+    function showUpdateToast() {
+        if (document.getElementById("update-toast")) return;
+
+        const el = document.createElement("div");
+        el.id = "update-toast";
+        el.className = "app-toast";
+        el.innerHTML = `
+            <div class="app-toast-title">Ny version tillgänglig</div>
+            <div class="app-toast-actions">
+                <button id="update-toast-reload" type="button" class="app-toast-btn app-toast-btn-primary">Ladda om</button>
+                <button id="update-toast-close" type="button" class="app-toast-btn">Senare</button>
+            </div>
+        `;
+        document.body.appendChild(el);
+
+        document.getElementById("update-toast-reload").addEventListener("click", () => {
+            location.reload();
+        });
+        document.getElementById("update-toast-close").addEventListener("click", () => {
+            el.remove();
+        });
+    }
+
     async function registerServiceWorker() {
         if (!("serviceWorker" in navigator)) return;
 
+        // Fanns redan en controller är det här en uppdatering, inte en förstagångsinstallation.
+        const hadController = !!navigator.serviceWorker.controller;
+
         try {
-            await navigator.serviceWorker.register("./sw.js");
+            // Versionen i query-strängen håller SW-cachen i takt med APP_VERSION.
+            await navigator.serviceWorker.register(`./sw.js?v=${encodeURIComponent(APP_VERSION)}`);
+            if (hadController) {
+                navigator.serviceWorker.addEventListener("controllerchange", showUpdateToast, { once: true });
+            }
             console.info("Service worker registrerad.");
         } catch (e) {
             console.warn("Service worker kunde inte registreras.", e);
