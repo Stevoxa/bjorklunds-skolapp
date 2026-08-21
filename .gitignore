@@ -32,3 +32,9 @@ Thumbs.db
 workbox-*.js
 *.cache
 
+
+# Personuppgifter: skolpaket och kontaktlistor ska aldrig committas
+skolapp-bundle*.json
+larare_kontakt*.json
+schema_mikaela*.json
+schema_robin*.json
