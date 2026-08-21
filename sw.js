@@ -64,6 +64,12 @@ self.addEventListener("fetch", (event) => {
   // Only cache http(s); extensions and other schemes are not supported by Cache API
   if (!request.url.startsWith("http")) return;
 
+  // Tredjepartsanrop (matsedelns proxy) ska INTE röras. Den gamla catch-all-grenen
+  // nedan är cache-first, vilket gjorde att första proxysvaret cachades permanent:
+  // matsedeln såg ut att fungera men var i själva verket fryst, och när cachen väl
+  // roterades slutade den fungera helt. Låt dem gå rakt ut på nätet istället.
+  if (new URL(request.url).origin !== self.location.origin) return;
+
   // Navigations: stale-while-revalidate for index.html.
   // Return cached fast, but update cache in background so new versions arrive.
   if (isNavigationRequest(request)) {

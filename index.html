@@ -348,6 +348,13 @@
             overflow-wrap: break-word;
         }
 
+        .food-stale {
+            margin-top: 6px;
+            font-size: 0.7rem;
+            font-style: italic;
+            opacity: 0.75;
+        }
+
         [data-theme="dark"] .food-box {
             background: var(--muted-bg);
             color: var(--text);
@@ -1076,6 +1083,7 @@
     // so any old cached data won't be reused.
     const STORAGE_KEY = `bjorklundskolapp_store_${APP_VERSION}`;
     const FOOD_CACHE_KEY = "bjorklundskolapp_food_cache";
+    const FOOD_PROXY_PREF_KEY = "bjorklundskolapp_food_proxy";
     const THEME_STORAGE_KEY = "bjorklundskolapp_theme";
     const storage = localStorage;
 
@@ -1977,6 +1985,70 @@
         }
     }
 
+    // skolmaten.se skickar Access-Control-Allow-Origin för sitt eget origin, så
+    // webbläsaren kan inte hämta flödet direkt - det måste gå via en proxy. En enda
+    // proxy är en enskild felkälla (codetabs låg nere 2026-08-21), därför provas flera.
+    const FOOD_PROXIES = [
+        (u) => `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(u)}`,
+        (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+        (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`
+    ];
+
+    const FOOD_FETCH_TIMEOUT_MS = 12000;
+
+    function readFoodCache() {
+        try {
+            return JSON.parse(storage.getItem(FOOD_CACHE_KEY) || "{}");
+        } catch (e) {
+            console.warn("Mat-cache kunde inte läsas. Återställer cache.", e);
+            storage.removeItem(FOOD_CACHE_KEY);
+            return {};
+        }
+    }
+
+    // Proxyn som fungerade senast provas först nästa gång. Utan detta får man vänta
+    // ut timeouten på en trasig proxy varje ny dag innan turen kommer till en som svarar.
+    function getPreferredProxyOrder() {
+        let first = 0;
+        try {
+            const saved = parseInt(storage.getItem(FOOD_PROXY_PREF_KEY), 10);
+            if (Number.isInteger(saved) && saved >= 0 && saved < FOOD_PROXIES.length) first = saved;
+        } catch { /* ignore */ }
+
+        return [first, ...FOOD_PROXIES.map((_, i) => i).filter(i => i !== first)];
+    }
+
+    // Provar proxyerna i tur och ordning och returnerar första giltiga RSS-svaret.
+    // Kastar om ingen lyckas, med alla fel samlade i meddelandet.
+    async function fetchRssViaProxies(url) {
+        const problems = [];
+
+        for (const proxyIndex of getPreferredProxyOrder()) {
+            const buildUrl = FOOD_PROXIES[proxyIndex];
+            const proxyUrl = buildUrl(url);
+            const host = new URL(proxyUrl).host;
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), FOOD_FETCH_TIMEOUT_MS);
+
+            try {
+                const res = await fetch(proxyUrl, { signal: controller.signal });
+                if (!res.ok) throw new Error(`status ${res.status}`);
+
+                const xmlText = await res.text();
+                if (!xmlText || !xmlText.includes("<rss")) throw new Error("inget RSS i svaret");
+
+                try { storage.setItem(FOOD_PROXY_PREF_KEY, String(proxyIndex)); } catch { /* ignore */ }
+                return xmlText;
+            } catch (e) {
+                problems.push(`${host}: ${e && e.name === "AbortError" ? "timeout" : (e && e.message) || e}`);
+            } finally {
+                clearTimeout(timer);
+            }
+        }
+
+        throw new Error(problems.join(" | "));
+    }
+
     async function fetchFood(url, id, day) {
         const el = document.getElementById(id);
         if (!el) return;
@@ -1988,15 +2060,7 @@
         }
 
         const today = new Date().toLocaleDateString("sv-SE");
-
-        let cache = {};
-        try {
-            cache = JSON.parse(storage.getItem(FOOD_CACHE_KEY) || "{}");
-        } catch (e) {
-            console.warn("Mat-cache kunde inte läsas. Återställer cache.", e);
-            cache = {};
-            storage.removeItem(FOOD_CACHE_KEY);
-        }
+        const cache = readFoodCache();
 
         if (cache[url] && cache[url].date === today && cache[url].xml) {
             displayFood(cache[url].xml, id, day, true);
@@ -2004,21 +2068,20 @@
         }
 
         try {
-            const res = await fetch(`https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(url)}`);
-            if (!res.ok) {
-                throw new Error(`Matproxy svarade med status ${res.status}`);
-            }
-
-            const xmlText = await res.text();
-            if (!xmlText || !xmlText.includes("<rss")) {
-                throw new Error("Ogiltigt RSS-svar");
-            }
-
+            const xmlText = await fetchRssViaProxies(url);
             cache[url] = { date: today, xml: xmlText };
             storage.setItem(FOOD_CACHE_KEY, JSON.stringify(cache));
             displayFood(xmlText, id, day, false);
         } catch (e) {
             console.warn("Kunde inte hämta mat:", e);
+
+            // Alla proxyer nere: hellre en gammal meny med tydlig datummärkning
+            // än ingenting alls.
+            if (cache[url] && cache[url].xml) {
+                displayFood(cache[url].xml, id, day, true, cache[url].date);
+                return;
+            }
+
             displayFoodError(id, "Kunde inte hämta mat just nu.");
         }
     }
@@ -2054,7 +2117,7 @@
         return escapedParts.join("<br>");
     }
 
-    function displayFood(xmlText, id, day, fromCache) {
+    function displayFood(xmlText, id, day, fromCache, staleDate) {
         const el = document.getElementById(id);
         if (!el) return;
 
@@ -2079,8 +2142,13 @@
 
             const icon = fromCache ? "⚡" : "🌐";
             const safeFoodHtml = sanitizeFoodHtml(food);
+            // staleDate sätts bara när alla proxyer misslyckats och vi visar en äldre
+            // sparad meny - då måste det synas att den kan vara inaktuell.
+            const staleHtml = staleDate
+                ? `<div class="food-stale">⚠ Kunde inte uppdatera. Sparad meny från ${escapeHtml(staleDate)}.</div>`
+                : "";
 
-            el.innerHTML = `<b>Dagens lunch:</b><br>${safeFoodHtml}<span style="position:absolute;bottom:4px;right:6px;font-size:0.6rem;opacity:0.4;">${icon}</span>`;
+            el.innerHTML = `<b>Dagens lunch:</b><br>${safeFoodHtml}${staleHtml}<span style="position:absolute;bottom:4px;right:6px;font-size:0.6rem;opacity:0.4;">${icon}</span>`;
         } catch (e) {
             console.warn("Kunde inte visa matdata:", e);
             displayFoodError(id, "Meny saknas.");
@@ -2165,10 +2233,7 @@
             if (!child || !child.rss) return null;
             if (cache[child.rss] && cache[child.rss].xml) return cache[child.rss].xml;
             try {
-                const res = await fetch(`https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(child.rss)}`);
-                if (!res.ok) throw new Error(res.status);
-                const xmlText = await res.text();
-                if (!xmlText || !xmlText.includes("<rss")) throw new Error("Ogiltigt svar");
+                const xmlText = await fetchRssViaProxies(child.rss);
                 cache[child.rss] = { date: now.toLocaleDateString("sv-SE"), xml: xmlText };
                 storage.setItem(FOOD_CACHE_KEY, JSON.stringify(cache));
                 return xmlText;
