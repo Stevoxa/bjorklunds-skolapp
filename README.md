@@ -106,7 +106,7 @@ Allt ligger i `localStorage`:
 | Nyckel | Innehåll |
 | --- | --- |
 | `bjorklundskolapp_store_<APP_VERSION>` | Barn, scheman, kontakter, lov och terminer |
-| `bjorklundskolapp_food_cache` | Senast hämtad matsedel per RSS-flöde |
+| `bjorklundskolapp_food_cache` | Veckans matsedel per RSS-flöde, nycklad på veckans måndagsdatum |
 | `bjorklundskolapp_food_proxy` | Vilken matproxy som fungerade senast |
 | `bjorklundskolapp_theme` | Temaval |
 
@@ -125,7 +125,9 @@ Skolmaten.se skickar `Access-Control-Allow-Origin` för sitt eget origin, så we
 2. `api.allorigins.win`
 3. `corsproxy.io`
 
-Är alla nere visas den senast sparade menyn med tydlig datummärkning istället för bara ett felmeddelande. Menyn cachas per dag; **⚙ → Rensa matlista** tvingar fram en ny hämtning.
+Är alla nere visas den senast sparade menyn med tydlig datummärkning istället för bara ett felmeddelande.
+
+Flödet är ett **veckoflöde**, så menyn hämtas en gång per vecka och cachas på veckans måndagsdatum. Att bläddra mellan dagar, öppna veckovyn eller starta om appen ger inga nya nätverksanrop förrän veckan byts. Samtidiga hämtningar av samma flöde slås ihop till en, och efter ett misslyckande väntar appen fem minuter innan den provar hela proxykedjan igen. **⚙ → Rensa matlista** tvingar fram en ny hämtning.
 
 Det här är appens svagaste punkt — den är beroende av gratistjänster som ligger nere ibland.
 

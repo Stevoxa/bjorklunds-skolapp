@@ -2006,6 +2006,57 @@
         }
     }
 
+    // Måndagens datum för veckan som `date` ligger i, t.ex. "2026-09-07".
+    // Används som cachenyckel: RSS-flödet är ett veckoflöde, så en hämtning
+    // per vecka räcker. (Måndagsdatum istället för år+veckonummer, som annars
+    // ger fel nyckel kring nyår när ISO-veckan spänner över två år.)
+    function getWeekStartStr(date) {
+        const d = new Date((date || new Date()).getTime());
+        d.setHours(12, 0, 0, 0);
+        d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+        return getLocalDateStr(d);
+    }
+
+    function isFoodEntryFresh(entry) {
+        return !!(entry && entry.xml && entry.week === getWeekStartStr());
+    }
+
+    // Läser om cachen precis före skrivningen. Utan det skriver två barn som
+    // hämtar parallellt över varandra: båda läste en tom cache innan sin await
+    // och den som skriver sist raderar den andres post.
+    function writeFoodCacheEntry(url, xmlText) {
+        const cache = readFoodCache();
+        cache[url] = {
+            week: getWeekStartStr(),
+            date: getLocalDateStr(new Date()),
+            xml: xmlText
+        };
+        try {
+            storage.setItem(FOOD_CACHE_KEY, JSON.stringify(cache));
+        } catch (e) {
+            console.warn("Mat-cache kunde inte sparas.", e);
+        }
+    }
+
+    // Pågående hämtningar per flöde. Varje dagbyte ritar om korten och anropar
+    // fetchFood på nytt; utan detta startas en ny proxykedja varje gång istället
+    // för att haka på den som redan är igång.
+    const foodFetchInFlight = new Map();
+
+    // Efter ett misslyckande: vänta innan hela proxykedjan körs igen, så att
+    // bläddring mellan dagar inte kostar en full timeout per svep.
+    const foodFailedUntil = new Map();
+    const FOOD_REFETCH_COOLDOWN_MS = 5 * 60 * 1000;
+
+    function fetchRssShared(url) {
+        const pending = foodFetchInFlight.get(url);
+        if (pending) return pending;
+
+        const p = fetchRssViaProxies(url).finally(() => foodFetchInFlight.delete(url));
+        foodFetchInFlight.set(url, p);
+        return p;
+    }
+
     // Proxyn som fungerade senast provas först nästa gång. Utan detta får man vänta
     // ut timeouten på en trasig proxy varje ny dag innan turen kommer till en som svarar.
     function getPreferredProxyOrder() {
@@ -2059,26 +2110,35 @@
             return;
         }
 
-        const today = new Date().toLocaleDateString("sv-SE");
-        const cache = readFoodCache();
+        const entry = readFoodCache()[url];
 
-        if (cache[url] && cache[url].date === today && cache[url].xml) {
-            displayFood(cache[url].xml, id, day, true);
+        // Flödet gäller hela veckan, så en hämtning per vecka räcker.
+        if (isFoodEntryFresh(entry)) {
+            displayFood(entry.xml, id, day, true);
+            return;
+        }
+
+        // Nyligen misslyckad hämtning: visa det vi har istället för att köra
+        // hela proxykedjan igen vid varje dagbyte.
+        if (Date.now() < (foodFailedUntil.get(url) || 0)) {
+            if (entry && entry.xml) displayFood(entry.xml, id, day, true, entry.date);
+            else displayFoodError(id, "Kunde inte hämta mat just nu.");
             return;
         }
 
         try {
-            const xmlText = await fetchRssViaProxies(url);
-            cache[url] = { date: today, xml: xmlText };
-            storage.setItem(FOOD_CACHE_KEY, JSON.stringify(cache));
+            const xmlText = await fetchRssShared(url);
+            foodFailedUntil.delete(url);
+            writeFoodCacheEntry(url, xmlText);
             displayFood(xmlText, id, day, false);
         } catch (e) {
             console.warn("Kunde inte hämta mat:", e);
+            foodFailedUntil.set(url, Date.now() + FOOD_REFETCH_COOLDOWN_MS);
 
             // Alla proxyer nere: hellre en gammal meny med tydlig datummärkning
             // än ingenting alls.
-            if (cache[url] && cache[url].xml) {
-                displayFood(cache[url].xml, id, day, true, cache[url].date);
+            if (entry && entry.xml) {
+                displayFood(entry.xml, id, day, true, entry.date);
                 return;
             }
 
@@ -2222,24 +2282,28 @@
         subtitleEl.textContent = "Vecka " + weekNum;
 
         const weekdays = ["Måndag", "Tisdag", "Onsdag", "Torsdag", "Fredag"];
-        let cache = {};
-        try {
-            cache = JSON.parse(storage.getItem(FOOD_CACHE_KEY) || "{}");
-        } catch {
-            cache = {};
-        }
 
+        // Samma cache och samma hämtning som dagsvyn: öppnar man veckovyn efter
+        // att dagskortet redan hämtat menyn görs inget nytt nätverksanrop.
         const getXmlForChild = async (child) => {
             if (!child || !child.rss) return null;
-            if (cache[child.rss] && cache[child.rss].xml) return cache[child.rss].xml;
+
+            const entry = readFoodCache()[child.rss];
+            if (isFoodEntryFresh(entry)) return entry.xml;
+
+            if (Date.now() < (foodFailedUntil.get(child.rss) || 0)) {
+                return entry && entry.xml ? entry.xml : null;
+            }
+
             try {
-                const xmlText = await fetchRssViaProxies(child.rss);
-                cache[child.rss] = { date: now.toLocaleDateString("sv-SE"), xml: xmlText };
-                storage.setItem(FOOD_CACHE_KEY, JSON.stringify(cache));
+                const xmlText = await fetchRssShared(child.rss);
+                foodFailedUntil.delete(child.rss);
+                writeFoodCacheEntry(child.rss, xmlText);
                 return xmlText;
             } catch (e) {
                 console.warn("Kunde inte hämta matsedel:", e);
-                return null;
+                foodFailedUntil.set(child.rss, Date.now() + FOOD_REFETCH_COOLDOWN_MS);
+                return entry && entry.xml ? entry.xml : null;
             }
         };
 
@@ -3124,6 +3188,9 @@
     function clearFoodCache() {
         if (confirm("Rensa mat-cache?")) {
             storage.removeItem(FOOD_CACHE_KEY);
+            // Nolla avsvalningen också, annars vägrar appen hämta igen direkt
+            // efter en rensning som gjorts för att komma runt ett fel.
+            foodFailedUntil.clear();
             location.reload();
         }
     }
