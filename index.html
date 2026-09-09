@@ -487,6 +487,42 @@
             font-size: 0.9rem;
         }
 
+        .settings-version {
+            margin-top: 22px;
+            padding-top: 14px;
+            border-top: 1px solid var(--muted-border);
+            text-align: center;
+            font-size: 0.72rem;
+            color: var(--muted-text);
+        }
+
+        .settings-version-btn {
+            display: block;
+            margin: 8px auto 0;
+            border: 1px solid var(--muted-border);
+            background: none;
+            color: var(--muted-text);
+            border-radius: 8px;
+            padding: 6px 12px;
+            font-size: 0.72rem;
+            cursor: pointer;
+        }
+
+        .settings-version-btn:disabled {
+            opacity: 0.5;
+            cursor: default;
+        }
+
+        .settings-version-status {
+            margin-top: 8px;
+            min-height: 1em;
+        }
+
+        .settings-version-status.is-update {
+            color: var(--accent);
+            font-weight: 700;
+        }
+
         .help-code {
             white-space: pre;
             overflow-x: auto;
@@ -847,6 +883,14 @@
     <button id="settings-close-btn" type="button" onclick="toggleSettings()" class="settings-close-btn">
         Stäng
     </button>
+
+    <div id="settings-version" class="settings-version">
+        <span id="settings-version-text"></span>
+        <button type="button" id="settings-update-btn" class="settings-version-btn" onclick="checkForAppUpdate()">
+            Sök efter uppdatering
+        </button>
+        <div id="settings-update-status" class="settings-version-status"></div>
+    </div>
 
     <div id="settings-help" class="hidden">
         <div class="settings-section">
@@ -1213,6 +1257,7 @@
                         const themeSelect = document.getElementById("theme-select");
                         if (themeSelect) themeSelect.value = getThemePreference();
                         renderSettingsForm();
+                        renderSettingsVersion();
                         view.style.display = "block";
                     }
                 } else {
@@ -2802,6 +2847,7 @@
         const themeSelect = document.getElementById("theme-select");
         if (themeSelect) themeSelect.value = getThemePreference();
         renderSettingsForm();
+        renderSettingsVersion();
         view.style.display = "block";
     }
 
@@ -2811,6 +2857,7 @@
         const form = document.getElementById("settings-form");
         const saveBtn = document.getElementById("settings-save-btn");
         const closeBtn = document.getElementById("settings-close-btn");
+        const version = document.getElementById("settings-version");
 
         if (!help) return;
 
@@ -2818,6 +2865,7 @@
         if (form) form.style.display = "none";
         if (saveBtn) saveBtn.style.display = "none";
         if (closeBtn) closeBtn.style.display = "none";
+        if (version) version.style.display = "none";
 
         help.classList.remove("hidden");
         help.style.display = "block";
@@ -2839,6 +2887,8 @@
         if (form) form.style.display = "";
         if (saveBtn) saveBtn.style.display = "";
         if (closeBtn) closeBtn.style.display = "";
+        const version = document.getElementById("settings-version");
+        if (version) version.style.display = "";
     }
 
     async function copyHelpCode(btn) {
@@ -3265,6 +3315,72 @@
         });
     }
 
+    // Sätts när service workern hämtat hem en nyare index.html. Överlever
+    // att inställningarna stängs och öppnas igen.
+    let updateReadyPending = false;
+
+    function setUpdateStatus(text, isUpdate) {
+        const el = document.getElementById("settings-update-status");
+        if (!el) return;
+        el.textContent = text || "";
+        el.classList.toggle("is-update", !!isUpdate);
+    }
+
+    function setUpdateButtonBusy(busy) {
+        const btn = document.getElementById("settings-update-btn");
+        if (btn) btn.disabled = !!busy;
+    }
+
+    function renderSettingsVersion() {
+        const el = document.getElementById("settings-version-text");
+        if (el) el.textContent = `Version ${APP_VERSION}`;
+        setUpdateButtonBusy(false);
+        if (updateReadyPending) setUpdateStatus("Ny version hämtad. Ladda om för att byta.", true);
+        else setUpdateStatus("");
+    }
+
+    // Kontrollen görs av service workern, inte här: ett fetch-anrop från sidan
+    // fångas av dess cache-first-gren och hade bara gett den cachade kopian.
+    async function checkForAppUpdate() {
+        setUpdateButtonBusy(true);
+        setUpdateStatus("Kontrollerar…");
+
+        try {
+            if (!("serviceWorker" in navigator)) {
+                setUpdateStatus("Kan inte kontrollera i den här webbläsaren.");
+                setUpdateButtonBusy(false);
+                return;
+            }
+
+            const reg = await navigator.serviceWorker.getRegistration();
+            if (reg) await reg.update();
+
+            const controller = navigator.serviceWorker.controller;
+            if (!controller) {
+                // Ingen service worker styr sidan ännu (t.ex. allra första besöket).
+                // Då finns heller ingen cache att ligga efter, så vi är per definition aktuella.
+                setUpdateStatus("Appen är uppdaterad.");
+                setUpdateButtonBusy(false);
+                return;
+            }
+
+            controller.postMessage({ type: "CHECK_UPDATE" });
+
+            // Svaret kommer som meddelande. Släpp knappen igen om inget hörs av.
+            setTimeout(() => {
+                const el = document.getElementById("settings-update-status");
+                if (el && el.textContent === "Kontrollerar…") {
+                    setUpdateStatus("Kunde inte kontrollera just nu.");
+                }
+                setUpdateButtonBusy(false);
+            }, 12000);
+        } catch (e) {
+            console.warn("Uppdateringskontroll misslyckades:", e);
+            setUpdateStatus("Kunde inte kontrollera just nu.");
+            setUpdateButtonBusy(false);
+        }
+    }
+
     async function registerServiceWorker() {
         if (!("serviceWorker" in navigator)) return;
 
@@ -3275,7 +3391,20 @@
         // nyare index.html och posta sitt meddelande innan register() resolvar, och då
         // hade en lyssnare som kopplas efteråt missat det.
         navigator.serviceWorker.addEventListener("message", (event) => {
-            if (event.data && event.data.type === "UPDATE_READY") showUpdateToast();
+            const type = event.data && event.data.type;
+            if (!type) return;
+
+            if (type === "UPDATE_READY") {
+                updateReadyPending = true;
+                showUpdateToast();
+                setUpdateStatus("Ny version hämtad. Ladda om för att byta.", true);
+            } else if (type === "UP_TO_DATE") {
+                setUpdateStatus("Appen är uppdaterad.");
+            } else if (type === "UPDATE_CHECK_FAILED") {
+                setUpdateStatus("Kunde inte kontrollera just nu.");
+            }
+
+            setUpdateButtonBusy(false);
         });
 
         try {

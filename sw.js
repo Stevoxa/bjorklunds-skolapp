@@ -67,6 +67,46 @@ async function notifyClientsOfUpdate() {
   }
 }
 
+// Hämtar index.html från nätet, jämför med den cachade kopian och skriver över den.
+// Returnerar om innehållet skilde sig. Anropas både vid navigering och när appen
+// ber om en kontroll. Att göra det här inne i service workern är viktigt: ett
+// fetch-anrop från sidan hade fångats av cache-first-grenen och bara gett cachen.
+async function revalidateIndexHtml() {
+  const cache = await caches.open(STATIC_CACHE);
+  const fresh = await fetch("./index.html", { cache: "no-store" });
+  if (!fresh.ok) throw new Error(`status ${fresh.status}`);
+
+  const previous = await cache.match("./index.html");
+  const [before, after] = await Promise.all([
+    previous ? previous.clone().text() : Promise.resolve(null),
+    fresh.clone().text(),
+  ]);
+
+  await cache.put("./index.html", fresh.clone());
+  return { changed: before !== null && before !== after, response: fresh };
+}
+
+// Manuell kontroll från inställningarna.
+self.addEventListener("message", (event) => {
+  if (!event.data || event.data.type !== "CHECK_UPDATE") return;
+
+  event.waitUntil(
+    (async () => {
+      const client = event.source;
+      try {
+        const { changed } = await revalidateIndexHtml();
+        if (changed) {
+          await notifyClientsOfUpdate();
+        } else if (client) {
+          client.postMessage({ type: "UP_TO_DATE" });
+        }
+      } catch (e) {
+        if (client) client.postMessage({ type: "UPDATE_CHECK_FAILED" });
+      }
+    })()
+  );
+});
+
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET") return;
@@ -88,25 +128,12 @@ self.addEventListener("fetch", (event) => {
         const cached = await cache.match("./index.html");
         const fetchAndUpdate = (async () => {
           try {
-            const fresh = await fetch("./index.html", { cache: "no-store" });
-            if (fresh.ok) {
-              // Jämför mot den cachade kopian innan vi skriver över den. Ändras bara
-              // index.html installeras ingen ny service worker, så det här är enda
-              // sättet att upptäcka en ny version - annars märker användaren den
-              // först vid nästa start.
-              const previous = await cache.match("./index.html");
-              const [before, after] = await Promise.all([
-                previous ? previous.clone().text() : Promise.resolve(null),
-                fresh.clone().text(),
-              ]);
-
-              await cache.put("./index.html", fresh.clone());
-
-              if (before !== null && before !== after) {
-                await notifyClientsOfUpdate();
-              }
-            }
-            return fresh;
+            // Ändras bara index.html installeras ingen ny service worker, så
+            // jämförelsen här är enda sättet att upptäcka en ny version - annars
+            // märker användaren den först vid nästa start.
+            const { changed, response } = await revalidateIndexHtml();
+            if (changed) await notifyClientsOfUpdate();
+            return response;
           } catch {
             return null;
           }

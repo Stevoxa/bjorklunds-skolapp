@@ -6,6 +6,8 @@ En liten PWA som samlar barnens skoldag på ett ställe: schema, pågående lekt
 
 Appen är byggd för mobil, fungerar offline och kan installeras på hemskärmen. All data ligger lokalt i webbläsaren — det finns ingen server och inget konto.
 
+<img src="docs/skarmbild-dagsvy.png" alt="Dagsvyn i mörkt läge: två elevkort med skoltider, pågående respektive nästa lektion, och menyraden längst ner" width="320">
+
 > Datan i repot är avsiktligt anonymiserade exempel ("Elev A", "Lärare Exempel 1"). Riktiga scheman och kontaktuppgifter läggs in genom import i appen och ska aldrig committas — se [.gitignore](.gitignore).
 
 ## Funktioner
@@ -157,6 +159,8 @@ Sista raden är viktig. Tidigare cache-firstades även tredjepartsanrop, vilket 
 `APP_VERSION` styr **bara** cachen — den ingår inte i localStorage-nyckeln. Att höja den är därför riskfritt och rör inte importerad data. Tidigare låg nyckeln på versionen, vilket raderade allt importerat innehåll vid varje versionshöjning; data under de gamla nycklarna (`bjorklundskolapp_store_v51` och liknande) flyttas automatiskt över vid start.
 
 En release syns för användaren så här: service workern hämtar `index.html` i bakgrunden vid varje start, jämför med den cachade kopian och meddelar sidan om den skiljer sig. Då visas en ruta som erbjuder omladdning — **på samma start**, och en omladdning räcker. Det fungerar även när bara `index.html` ändrats, alltså utan att någon ny service worker installerats.
+
+Längst ned i inställningarna står vilken version som körs, med en knapp som kontrollerar mot servern på begäran och svarar *Appen är uppdaterad* eller *Ny version hämtad*. Kontrollen görs inne i service workern — ett `fetch` från sidan hade fångats av dess cache-first-gren och bara gett den cachade kopian tillbaka.
 
 ## Filer
 
