@@ -58,6 +58,15 @@ function isNavigationRequest(request) {
   return request.mode === "navigate";
 }
 
+// Talar om för öppna flikar att en nyare index.html nu ligger i cachen, så att
+// appen kan erbjuda omladdning direkt istället för vid nästa start.
+async function notifyClientsOfUpdate() {
+  const clients = await self.clients.matchAll({ type: "window" });
+  for (const client of clients) {
+    client.postMessage({ type: "UPDATE_READY" });
+  }
+}
+
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET") return;
@@ -81,7 +90,21 @@ self.addEventListener("fetch", (event) => {
           try {
             const fresh = await fetch("./index.html", { cache: "no-store" });
             if (fresh.ok) {
+              // Jämför mot den cachade kopian innan vi skriver över den. Ändras bara
+              // index.html installeras ingen ny service worker, så det här är enda
+              // sättet att upptäcka en ny version - annars märker användaren den
+              // först vid nästa start.
+              const previous = await cache.match("./index.html");
+              const [before, after] = await Promise.all([
+                previous ? previous.clone().text() : Promise.resolve(null),
+                fresh.clone().text(),
+              ]);
+
               await cache.put("./index.html", fresh.clone());
+
+              if (before !== null && before !== after) {
+                await notifyClientsOfUpdate();
+              }
             }
             return fresh;
           } catch {

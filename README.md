@@ -105,7 +105,7 @@ Allt ligger i `localStorage`:
 
 | Nyckel | Innehåll |
 | --- | --- |
-| `bjorklundskolapp_store_<APP_VERSION>` | Barn, scheman, kontakter, lov och terminer |
+| `bjorklundskolapp_store` | Barn, scheman, kontakter, lov och terminer |
 | `bjorklundskolapp_food_cache` | Veckans matsedel per RSS-flöde, nycklad på veckans måndagsdatum |
 | `bjorklundskolapp_food_proxy` | Vilken matproxy som fungerade senast |
 | `bjorklundskolapp_theme` | Temaval |
@@ -152,9 +152,11 @@ Sista raden är viktig. Tidigare cache-firstades även tredjepartsanrop, vilket 
 
 ### Versionshantering
 
-`APP_VERSION` i [index.html](index.html) registrerar service workern som `./sw.js?v=<version>`, och service workern läser sitt cachenamn därifrån. En höjd version roterar alltså cachen automatiskt. När en ny version tagit över visas en ruta som erbjuder omladdning, eftersom navigeringar serveras från cachen.
+`APP_VERSION` i [index.html](index.html) registrerar service workern som `./sw.js?v=<version>`, och service workern läser sitt cachenamn därifrån. En höjd version roterar alltså cachen automatiskt.
 
-> **Obs:** `APP_VERSION` ingår även i localStorage-nyckeln. Att höja den nollställer därför all importerad data. Exportera ett paket först, eller frikoppla nycklarna innan versionen höjs.
+`APP_VERSION` styr **bara** cachen — den ingår inte i localStorage-nyckeln. Att höja den är därför riskfritt och rör inte importerad data. Tidigare låg nyckeln på versionen, vilket raderade allt importerat innehåll vid varje versionshöjning; data under de gamla nycklarna (`bjorklundskolapp_store_v51` och liknande) flyttas automatiskt över vid start.
+
+En release syns för användaren så här: service workern hämtar `index.html` i bakgrunden vid varje start, jämför med den cachade kopian och meddelar sidan om den skiljer sig. Då visas en ruta som erbjuder omladdning — **på samma start**, och en omladdning räcker. Det fungerar även när bara `index.html` ändrats, alltså utan att någon ny service worker installerats.
 
 ## Filer
 

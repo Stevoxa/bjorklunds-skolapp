@@ -1078,10 +1078,15 @@
 </div>
 
 <script>
-    const APP_VERSION = "v51";
-    // Use localStorage for persistence (like before), but with new key names
-    // so any old cached data won't be reused.
-    const STORAGE_KEY = `bjorklundskolapp_store_${APP_VERSION}`;
+    // Styr ENBART service worker-cachen och registreringens ?v=. Höj den vid varje
+    // release - den påverkar inte sparad data.
+    const APP_VERSION = "v52";
+
+    // Medvetet frikopplad från APP_VERSION. Låg nyckeln kvar på versionen raderades
+    // allt importerat innehåll så fort versionen höjdes, vilket gjorde releaser
+    // riskabla. Äldre versionsnycklar migreras in i den här vid start.
+    const STORAGE_KEY = "bjorklundskolapp_store";
+    const LEGACY_STORAGE_KEY_PATTERN = /^bjorklundskolapp_store_v\d+$/;
     const FOOD_CACHE_KEY = "bjorklundskolapp_food_cache";
     const FOOD_PROXY_PREF_KEY = "bjorklundskolapp_food_proxy";
     const THEME_STORAGE_KEY = "bjorklundskolapp_theme";
@@ -1650,8 +1655,47 @@
         console.info("Medföljande schema/lov/terminer uppdaterade.");
     }
 
+    // Flyttar data från de gamla versionsnycklarna (bjorklundskolapp_store_v51 osv)
+    // till den stabila nyckeln. Finns flera tas den med högst versionsnummer, och
+    // de gamla städas bort. Gör inget om den stabila nyckeln redan har data.
+    function migrateVersionedStorageKey() {
+        try {
+            if (storage.getItem(STORAGE_KEY)) {
+                // Redan migrerad - rensa bara eventuella kvarvarande gamla nycklar.
+                for (let i = storage.length - 1; i >= 0; i--) {
+                    const key = storage.key(i);
+                    if (key && LEGACY_STORAGE_KEY_PATTERN.test(key)) storage.removeItem(key);
+                }
+                return;
+            }
+
+            const legacyKeys = [];
+            for (let i = 0; i < storage.length; i++) {
+                const key = storage.key(i);
+                if (key && LEGACY_STORAGE_KEY_PATTERN.test(key)) legacyKeys.push(key);
+            }
+            if (legacyKeys.length === 0) return;
+
+            legacyKeys.sort((a, b) => {
+                const na = parseInt(a.replace(/\D+/g, ""), 10) || 0;
+                const nb = parseInt(b.replace(/\D+/g, ""), 10) || 0;
+                return na - nb;
+            });
+
+            const newest = legacyKeys[legacyKeys.length - 1];
+            const value = storage.getItem(newest);
+            if (value) storage.setItem(STORAGE_KEY, value);
+
+            legacyKeys.forEach((k) => storage.removeItem(k));
+            console.info(`Sparad data flyttad från ${newest} till ${STORAGE_KEY}.`);
+        } catch (e) {
+            console.warn("Kunde inte migrera sparad data.", e);
+        }
+    }
+
     async function initApp() {
         applyTheme(getThemePreference());
+        migrateVersionedStorageKey();
         purgeLegacyLocalStorage();
         skipWeekend(activeDate, 1);
 
@@ -3226,6 +3270,13 @@
 
         // Fanns redan en controller är det här en uppdatering, inte en förstagångsinstallation.
         const hadController = !!navigator.serviceWorker.controller;
+
+        // Kopplas före registreringen inväntas. Service workern kan hinna upptäcka en
+        // nyare index.html och posta sitt meddelande innan register() resolvar, och då
+        // hade en lyssnare som kopplas efteråt missat det.
+        navigator.serviceWorker.addEventListener("message", (event) => {
+            if (event.data && event.data.type === "UPDATE_READY") showUpdateToast();
+        });
 
         try {
             // Versionen i query-strängen håller SW-cachen i takt med APP_VERSION.
