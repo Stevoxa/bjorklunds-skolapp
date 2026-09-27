@@ -127,9 +127,24 @@ Skolmaten.se skickar `Access-Control-Allow-Origin` för sitt eget origin, så we
 2. `api.allorigins.win`
 3. `corsproxy.io`
 
-Är alla nere visas den senast sparade menyn med tydlig datummärkning istället för bara ett felmeddelande.
+### Cachen nycklas på veckan datan gäller
 
-Flödet är ett **veckoflöde**, så menyn hämtas en gång per vecka och cachas på veckans måndagsdatum. Att bläddra mellan dagar, öppna veckovyn eller starta om appen ger inga nya nätverksanrop förrän veckan byts. Samtidiga hämtningar av samma flöde slås ihop till en, och efter ett misslyckande väntar appen fem minuter innan den provar hela proxykedjan igen. **⚙ → Rensa matlista** tvingar fram en ny hämtning.
+Flödet är ett **veckoflöde**, så en hämtning per vecka räcker. Det avgörande är *vilken* vecka som cachas: skolan publicerar ofta nästa veckas meny sent, och fram till dess svarar flödet med förra veckans meny. Nycklas cachen på hämtningstillfället sparas den gamla menyn som om den gällde den nya veckan.
+
+Appen läser därför veckan ur datan. Varje post i flödet har `pubDate` satt till sin egen dag, och måndagen i den veckan blir cachenyckeln. En post kan bara visas om dess vecka är den innevarande — **en annan veckas meny visas aldrig**, eftersom den ändå inte stämmer. Saknas veckans meny står det *"Matsedeln för vecka N är inte publicerad än"* med en **Försök igen**-knapp.
+
+Dagsvyn och veckovyn går genom samma funktion och kan därför aldrig visa olika saker. Veckovyn slår upp en gång per barn, inte en gång per barn och dag.
+
+Hämtningspolicy:
+
+| Läge | Beteende |
+| --- | --- |
+| Veckans meny finns i cachen | Inga nätverksanrop alls |
+| Flödet har ännu inte veckans meny | Nytt försök tidigast efter två timmar, eller direkt via **Försök igen** |
+| Nätverks- eller proxyfel | Nytt försök tidigast efter fem minuter |
+| Ny vecka börjar | Försöker direkt, oavsett tidigare väntetid |
+
+Samtidiga hämtningar av samma flöde slås ihop till en. **⚙ → Rensa matlista** nollställer allt och tvingar fram en ny hämtning.
 
 Det här är appens svagaste punkt — den är beroende av gratistjänster som ligger nere ibland.
 

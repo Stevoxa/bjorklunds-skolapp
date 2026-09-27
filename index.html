@@ -348,11 +348,17 @@
             overflow-wrap: break-word;
         }
 
-        .food-stale {
-            margin-top: 6px;
+        .food-retry {
+            display: inline-block;
+            margin-top: 8px;
+            border: 1px solid currentColor;
+            background: none;
+            color: inherit;
+            opacity: 0.7;
+            border-radius: 6px;
+            padding: 3px 9px;
             font-size: 0.7rem;
-            font-style: italic;
-            opacity: 0.75;
+            cursor: pointer;
         }
 
         [data-theme="dark"] .food-box {
@@ -1124,7 +1130,7 @@
 <script>
     // Styr ENBART service worker-cachen och registreringens ?v=. Höj den vid varje
     // release - den påverkar inte sparad data.
-    const APP_VERSION = "v52";
+    const APP_VERSION = "v53";
 
     // Medvetet frikopplad från APP_VERSION. Låg nyckeln kvar på versionen raderades
     // allt importerat innehåll så fort versionen höjdes, vilket gjorde releaser
@@ -2106,20 +2112,56 @@
         return getLocalDateStr(d);
     }
 
-    function isFoodEntryFresh(entry) {
-        return !!(entry && entry.xml && entry.week === getWeekStartStr());
+    // Vilken vecka flödets innehåll FAKTISKT gäller. Varje post har pubDate satt
+    // till sin egen dag (midnatt GMT), så måndagen i den veckan identifierar
+    // flödet entydigt.
+    //
+    // Det här är kärnan i problemet: skolan publicerar ofta nästa veckas meny sent,
+    // och fram till dess svarar flödet med FÖRRA veckans meny. Nycklar man cachen
+    // på hämtningstillfället sparas den gamla menyn som om den gällde den nya
+    // veckan, och visas sedan som om den vore aktuell.
+    function getFeedWeekStart(xmlText) {
+        if (!xmlText || !xmlText.includes("<rss")) return null;
+
+        try {
+            const xml = new DOMParser().parseFromString(xmlText, "text/xml");
+            if (xml.querySelector("parsererror")) return null;
+
+            let earliest = null;
+            xml.querySelectorAll("item").forEach((item) => {
+                const raw = item.querySelector("pubDate")?.textContent;
+                if (!raw) return;
+                const t = Date.parse(raw);
+                if (Number.isNaN(t)) return;
+                if (earliest === null || t < earliest) earliest = t;
+            });
+
+            if (earliest !== null) {
+                // pubDate är midnatt GMT. Läs UTC-delarna och bygg en lokal middag,
+                // annars kan tidszonen putta datumet till fel dygn.
+                const d = new Date(earliest);
+                return getWeekStartStr(new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 12));
+            }
+
+            // Saknas pubDate: lita på "Vecka NN" i titeln bara om den matchar
+            // innevarande vecka - veckonumret ensamt upprepas ju varje år.
+            const titles = [...xml.querySelectorAll("item")]
+                .map((i) => (i.querySelector("title")?.textContent || "")).join(" ");
+            const m = titles.match(/vecka\s*(\d{1,2})/i);
+            if (m && parseInt(m[1], 10) === getWeek(new Date())) return getWeekStartStr(new Date());
+
+            return null;
+        } catch {
+            return null;
+        }
     }
 
     // Läser om cachen precis före skrivningen. Utan det skriver två barn som
     // hämtar parallellt över varandra: båda läste en tom cache innan sin await
     // och den som skriver sist raderar den andres post.
-    function writeFoodCacheEntry(url, xmlText) {
+    function writeFoodCacheEntry(url, patch) {
         const cache = readFoodCache();
-        cache[url] = {
-            week: getWeekStartStr(),
-            date: getLocalDateStr(new Date()),
-            xml: xmlText
-        };
+        cache[url] = Object.assign({}, cache[url] || {}, patch);
         try {
             storage.setItem(FOOD_CACHE_KEY, JSON.stringify(cache));
         } catch (e) {
@@ -2189,50 +2231,84 @@
         throw new Error(problems.join(" | "));
     }
 
-    async function fetchFood(url, id, day) {
-        const el = document.getElementById(id);
-        if (!el) return;
+    // Hur länge vi väntar innan vi frågar igen när skolan inte publicerat veckans
+    // meny än. Nätverksfel har en egen, kortare avsvalning.
+    const FOOD_RETRY_INTERVAL_MS = 2 * 60 * 60 * 1000;
 
-        if (!url) {
-            // RSS saknas för barnet: visa fallback och undvik proxy-fel.
-            displayFoodError(id, "Meny saknas.");
-            return;
+    // Enda källan till matsedelsdata. Både dagsvyn och veckovyn går via den här, så
+    // de kan aldrig visa olika saker. Returnerar data för INNEVARANDE vecka eller
+    // ingenting - aldrig en annan veckas meny.
+    async function getWeekMenu(url, force) {
+        const weekStart = getWeekStartStr(new Date());
+        if (!url) return { status: "saknas", xml: null, weekStart };
+
+        const entry = readFoodCache()[url] || null;
+
+        if (entry && entry.weekStart === weekStart && entry.xml) {
+            return { status: "ok", xml: entry.xml, weekStart, fromCache: true };
         }
 
-        const entry = readFoodCache()[url];
-
-        // Flödet gäller hela veckan, så en hämtning per vecka räcker.
-        if (isFoodEntryFresh(entry)) {
-            displayFood(entry.xml, id, day, true);
-            return;
-        }
-
-        // Nyligen misslyckad hämtning: visa det vi har istället för att köra
-        // hela proxykedjan igen vid varje dagbyte.
-        if (Date.now() < (foodFailedUntil.get(url) || 0)) {
-            if (entry && entry.xml) displayFood(entry.xml, id, day, true, entry.date);
-            else displayFoodError(id, "Kunde inte hämta mat just nu.");
-            return;
+        if (!force) {
+            if (Date.now() < (foodFailedUntil.get(url) || 0)) {
+                return { status: "natverksfel", xml: null, weekStart };
+            }
+            // Redan frågat för den här veckan, och skolan hade inte publicerat än.
+            if (entry && entry.lastAttemptWeek === weekStart &&
+                Date.now() - (entry.lastAttempt || 0) < FOOD_RETRY_INTERVAL_MS) {
+                return { status: "inte-publicerad", xml: null, weekStart };
+            }
         }
 
         try {
             const xmlText = await fetchRssShared(url);
             foodFailedUntil.delete(url);
-            writeFoodCacheEntry(url, xmlText);
-            displayFood(xmlText, id, day, false);
-        } catch (e) {
-            console.warn("Kunde inte hämta mat:", e);
-            foodFailedUntil.set(url, Date.now() + FOOD_REFETCH_COOLDOWN_MS);
 
-            // Alla proxyer nere: hellre en gammal meny med tydlig datummärkning
-            // än ingenting alls.
-            if (entry && entry.xml) {
-                displayFood(entry.xml, id, day, true, entry.date);
-                return;
+            const feedWeekStart = getFeedWeekStart(xmlText);
+            writeFoodCacheEntry(url, {
+                xml: xmlText,
+                weekStart: feedWeekStart,
+                fetchedAt: Date.now(),
+                lastAttempt: Date.now(),
+                lastAttemptWeek: weekStart
+            });
+
+            if (feedWeekStart === weekStart) {
+                return { status: "ok", xml: xmlText, weekStart, fromCache: false };
             }
-
-            displayFoodError(id, "Kunde inte hämta mat just nu.");
+            return { status: "inte-publicerad", xml: null, weekStart };
+        } catch (e) {
+            console.warn("Kunde inte hämta matsedeln:", e);
+            foodFailedUntil.set(url, Date.now() + FOOD_REFETCH_COOLDOWN_MS);
+            return { status: "natverksfel", xml: null, weekStart };
         }
+    }
+
+    function foodUnavailableText(status, weekStart) {
+        if (status === "saknas") return "Meny saknas.";
+        if (status === "natverksfel") return "Kunde inte hämta matsedeln just nu.";
+        const v = getWeek(new Date(weekStart + "T12:00:00"));
+        return `Matsedeln för vecka ${v} är inte publicerad än.`;
+    }
+
+    async function fetchFood(url, id, day, force) {
+        const el = document.getElementById(id);
+        if (!el) return;
+
+        if (!url) {
+            displayFoodMessage(id, "Meny saknas.");
+            return;
+        }
+
+        const result = await getWeekMenu(url, force);
+        if (result.status === "ok") {
+            displayFood(result.xml, id, day, result.fromCache);
+            return;
+        }
+
+        displayFoodMessage(id, foodUnavailableText(result.status, result.weekStart), () => {
+            displayFoodMessage(id, "Hämtar matsedel…");
+            fetchFood(url, id, day, true);
+        });
     }
 
     function sanitizeFoodHtml(food) {
@@ -2266,7 +2342,7 @@
         return escapedParts.join("<br>");
     }
 
-    function displayFood(xmlText, id, day, fromCache, staleDate) {
+    function displayFood(xmlText, id, day, fromCache) {
         const el = document.getElementById(id);
         if (!el) return;
 
@@ -2289,25 +2365,31 @@
                 }
             });
 
-            const icon = fromCache ? "⚡" : "🌐";
+            const icon = fromCache ? "\u26a1" : "\ud83c\udf10";
             const safeFoodHtml = sanitizeFoodHtml(food);
-            // staleDate sätts bara när alla proxyer misslyckats och vi visar en äldre
-            // sparad meny - då måste det synas att den kan vara inaktuell.
-            const staleHtml = staleDate
-                ? `<div class="food-stale">⚠ Kunde inte uppdatera. Sparad meny från ${escapeHtml(staleDate)}.</div>`
-                : "";
 
-            el.innerHTML = `<b>Dagens lunch:</b><br>${safeFoodHtml}${staleHtml}<span style="position:absolute;bottom:4px;right:6px;font-size:0.6rem;opacity:0.4;">${icon}</span>`;
+            el.innerHTML = `<b>Dagens lunch:</b><br>${safeFoodHtml}<span style="position:absolute;bottom:4px;right:6px;font-size:0.6rem;opacity:0.4;">${icon}</span>`;
         } catch (e) {
             console.warn("Kunde inte visa matdata:", e);
-            displayFoodError(id, "Meny saknas.");
+            displayFoodMessage(id, "Meny saknas.");
         }
     }
 
-    function displayFoodError(id, message) {
+    // Visar ett meddelande istället för en meny. onRetry ger en "Försök igen"-knapp,
+    // så man slipper vänta ut avsvalningen när skolan just publicerat veckan.
+    function displayFoodMessage(id, message, onRetry) {
         const el = document.getElementById(id);
         if (!el) return;
+
         el.innerHTML = `<b>Dagens lunch:</b><br>${escapeHtml(message)}`;
+
+        if (!onRetry) return;
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "food-retry";
+        btn.textContent = "Försök igen";
+        btn.addEventListener("click", onRetry);
+        el.appendChild(btn);
     }
 
     function getFoodFromXml(xmlText, dayName) {
@@ -2372,40 +2454,24 @@
 
         const weekdays = ["Måndag", "Tisdag", "Onsdag", "Torsdag", "Fredag"];
 
-        // Samma cache och samma hämtning som dagsvyn: öppnar man veckovyn efter
-        // att dagskortet redan hämtat menyn görs inget nytt nätverksanrop.
-        const getXmlForChild = async (child) => {
-            if (!child || !child.rss) return null;
-
-            const entry = readFoodCache()[child.rss];
-            if (isFoodEntryFresh(entry)) return entry.xml;
-
-            if (Date.now() < (foodFailedUntil.get(child.rss) || 0)) {
-                return entry && entry.xml ? entry.xml : null;
-            }
-
-            try {
-                const xmlText = await fetchRssShared(child.rss);
-                foodFailedUntil.delete(child.rss);
-                writeFoodCacheEntry(child.rss, xmlText);
-                return xmlText;
-            } catch (e) {
-                console.warn("Kunde inte hämta matsedel:", e);
-                foodFailedUntil.set(child.rss, Date.now() + FOOD_REFETCH_COOLDOWN_MS);
-                return entry && entry.xml ? entry.xml : null;
-            }
-        };
+        // Exakt samma resolver som dagsvyn, och den körs en gång per barn - inte en
+        // gång per dag och barn. Har dagskortet redan hämtat veckan görs inget
+        // nätverksanrop alls, och de två vyerna kan aldrig visa olika saker.
+        const menus = [];
+        for (const child of appState.children) {
+            menus.push(await getWeekMenu(child && child.rss));
+        }
 
         const parts = [];
         for (const dayName of weekdays) {
             const dayCards = [];
-            for (let i = 0; i < appState.children.length; i++) {
-                const child = appState.children[i];
-                const xmlText = await getXmlForChild(child);
-                const menu = xmlText ? getFoodFromXml(xmlText, dayName) : "Kunde inte hämta.";
-                const safeHtml = sanitizeFoodHtml(menu);
-                dayCards.push(`<div class="food-day"><div class="food-day-title">${escapeHtml(child.name)}</div><div class="food-day-menu">${safeHtml}</div></div>`);
-            }
+            appState.children.forEach((child, i) => {
+                const result = menus[i];
+                const innerHtml = result.status === "ok"
+                    ? sanitizeFoodHtml(getFoodFromXml(result.xml, dayName))
+                    : escapeHtml(foodUnavailableText(result.status, result.weekStart));
+                dayCards.push(`<div class="food-day"><div class="food-day-title">${escapeHtml(child.name)}</div><div class="food-day-menu">${innerHtml}</div></div>`);
+            });
             parts.push(`<div class="food-week-card"><h4>${escapeHtml(dayName)}</h4>${dayCards.join("")}</div>`);
         }
         contentEl.innerHTML = parts.join("");
