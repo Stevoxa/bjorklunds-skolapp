@@ -420,6 +420,7 @@
         }
 
         .settings-section input[type="text"],
+        .settings-section input[type="url"],
         .settings-section textarea,
         .settings-section select {
             width: 100%;
@@ -491,6 +492,13 @@
             margin-top: 12px;
             cursor: pointer;
             font-size: 0.9rem;
+        }
+
+        .settings-hint {
+            font-size: 0.72rem;
+            color: var(--muted-text);
+            margin: -4px 0 4px 0;
+            line-height: 1.45;
         }
 
         .settings-version {
@@ -878,6 +886,13 @@
             <option value="light">Ljus</option>
             <option value="dark">Mörk</option>
         </select>
+        <label for="food-proxy-input" style="display:block; margin-top:14px;"><b>Matproxy</b></label>
+        <input type="url" id="food-proxy-input" placeholder="https://din-worker.workers.dev"
+               autocomplete="off" autocapitalize="off" spellcheck="false">
+        <div class="settings-hint">
+            Adress till din egen Cloudflare Worker. Lämnas fältet tomt används publika
+            gratisproxyer, som ofta ligger nere.
+        </div>
         <button type="button" onclick="clearFoodCache()" class="settings-btn settings-btn-warn" style="margin-top:14px;">
             ↻ Rensa matlista
         </button>
@@ -1130,7 +1145,7 @@
 <script>
     // Styr ENBART service worker-cachen och registreringens ?v=. Höj den vid varje
     // release - den påverkar inte sparad data.
-    const APP_VERSION = "v53";
+    const APP_VERSION = "v54";
 
     // Medvetet frikopplad från APP_VERSION. Låg nyckeln kvar på versionen raderades
     // allt importerat innehåll så fort versionen höjdes, vilket gjorde releaser
@@ -1139,6 +1154,7 @@
     const LEGACY_STORAGE_KEY_PATTERN = /^bjorklundskolapp_store_v\d+$/;
     const FOOD_CACHE_KEY = "bjorklundskolapp_food_cache";
     const FOOD_PROXY_PREF_KEY = "bjorklundskolapp_food_proxy";
+    const FOOD_PROXY_URL_KEY = "bjorklundskolapp_food_proxy_url";
     const THEME_STORAGE_KEY = "bjorklundskolapp_theme";
     const storage = localStorage;
 
@@ -1262,6 +1278,8 @@
                     if (view) {
                         const themeSelect = document.getElementById("theme-select");
                         if (themeSelect) themeSelect.value = getThemePreference();
+                        const proxyInput = document.getElementById("food-proxy-input");
+                        if (proxyInput) proxyInput.value = getCustomProxyBase();
                         renderSettingsForm();
                         renderSettingsVersion();
                         view.style.display = "block";
@@ -1366,7 +1384,25 @@
 
     // Plockar in namn/RSS från inställningsformuläret i appState. Bryts ut ur saveSettings()
     // så att en import mitt i formuläret inte slänger det användaren just skrivit.
+    // Byter man proxy måste minnet av "den som fungerade senast" och eventuella
+    // avsvalningar nollas, annars provas den gamla trasiga först ändå.
+    function saveFoodProxySetting() {
+        const el = document.getElementById("food-proxy-input");
+        if (!el) return;
+
+        const next = el.value.trim().replace(/\/+$/, "");
+        const prev = getCustomProxyBase();
+        if (next === prev) return;
+
+        if (next) storage.setItem(FOOD_PROXY_URL_KEY, next);
+        else storage.removeItem(FOOD_PROXY_URL_KEY);
+
+        storage.removeItem(FOOD_PROXY_PREF_KEY);
+        foodFailedUntil.clear();
+    }
+
     function collectSettingsInputs() {
+        saveFoodProxySetting();
         if (!appState || !Array.isArray(appState.children)) return;
         appState.children.forEach((c, i) => {
             const nameEl = document.getElementById(`name-${i}`);
@@ -2080,14 +2116,33 @@
         }
     }
 
-    // skolmaten.se skickar Access-Control-Allow-Origin för sitt eget origin, så
-    // webbläsaren kan inte hämta flödet direkt - det måste gå via en proxy. En enda
-    // proxy är en enskild felkälla (codetabs låg nere 2026-08-21), därför provas flera.
-    const FOOD_PROXIES = [
-        (u) => `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(u)}`,
-        (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-        (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`
+    // Varje endpoint hos skolmaten.se låser Access-Control-Allow-Origin till sitt
+    // eget origin, så webbläsaren kan aldrig hämta flödet direkt från appen -
+    // hämtningen måste ske någon annanstans.
+    //
+    // De publika gratisproxyerna gick alla sönder samtidigt 2026-09-28 (corsproxy.io
+    // började kräva betald nyckel, codetabs vägrade anslutning, allorigins slutade
+    // svara). Därför är den egna Cloudflare-workern förstahandsval, se
+    // worker/skolmat-proxy.js. De publika ligger kvar som reserv om workern är nere.
+    const PUBLIC_FOOD_PROXIES = [
+        { id: "codetabs", build: (u) => `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(u)}` },
+        { id: "allorigins", build: (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}` }
     ];
+
+    // Egen proxy anges i inställningarna och sparas lokalt - den hamnar alltså
+    // aldrig i repot.
+    function getCustomProxyBase() {
+        return (storage.getItem(FOOD_PROXY_URL_KEY) || "").trim().replace(/\/+$/, "");
+    }
+
+    function getFoodProxies() {
+        const base = getCustomProxyBase();
+        if (!base) return PUBLIC_FOOD_PROXIES;
+        return [
+            { id: "egen", build: (u) => `${base}/?url=${encodeURIComponent(u)}` },
+            ...PUBLIC_FOOD_PROXIES
+        ];
+    }
 
     const FOOD_FETCH_TIMEOUT_MS = 12000;
 
@@ -2189,15 +2244,17 @@
     }
 
     // Proxyn som fungerade senast provas först nästa gång. Utan detta får man vänta
-    // ut timeouten på en trasig proxy varje ny dag innan turen kommer till en som svarar.
+    // ut timeouten på en trasig proxy varje gång innan turen kommer till en som svarar.
+    // Kom ihåg vilken via id och inte index: listan ändrar längd när en egen proxy
+    // läggs till eller tas bort, och då hade ett sparat index pekat på fel rad.
     function getPreferredProxyOrder() {
-        let first = 0;
-        try {
-            const saved = parseInt(storage.getItem(FOOD_PROXY_PREF_KEY), 10);
-            if (Number.isInteger(saved) && saved >= 0 && saved < FOOD_PROXIES.length) first = saved;
-        } catch { /* ignore */ }
+        const proxies = getFoodProxies();
+        let rememberedId = null;
+        try { rememberedId = storage.getItem(FOOD_PROXY_PREF_KEY); } catch { /* ignore */ }
 
-        return [first, ...FOOD_PROXIES.map((_, i) => i).filter(i => i !== first)];
+        const first = proxies.filter(p => p.id === rememberedId);
+        const rest = proxies.filter(p => p.id !== rememberedId);
+        return [...first, ...rest];
     }
 
     // Provar proxyerna i tur och ordning och returnerar första giltiga RSS-svaret.
@@ -2205,10 +2262,17 @@
     async function fetchRssViaProxies(url) {
         const problems = [];
 
-        for (const proxyIndex of getPreferredProxyOrder()) {
-            const buildUrl = FOOD_PROXIES[proxyIndex];
-            const proxyUrl = buildUrl(url);
-            const host = new URL(proxyUrl).host;
+        for (const proxy of getPreferredProxyOrder()) {
+            let proxyUrl;
+            let host;
+            try {
+                proxyUrl = proxy.build(url);
+                host = new URL(proxyUrl).host;
+            } catch {
+                problems.push(`${proxy.id}: ogiltig proxyadress`);
+                continue;
+            }
+
             const controller = new AbortController();
             const timer = setTimeout(() => controller.abort(), FOOD_FETCH_TIMEOUT_MS);
 
@@ -2219,7 +2283,7 @@
                 const xmlText = await res.text();
                 if (!xmlText || !xmlText.includes("<rss")) throw new Error("inget RSS i svaret");
 
-                try { storage.setItem(FOOD_PROXY_PREF_KEY, String(proxyIndex)); } catch { /* ignore */ }
+                try { storage.setItem(FOOD_PROXY_PREF_KEY, proxy.id); } catch { /* ignore */ }
                 return xmlText;
             } catch (e) {
                 problems.push(`${host}: ${e && e.name === "AbortError" ? "timeout" : (e && e.message) || e}`);
@@ -2912,6 +2976,8 @@
 
         const themeSelect = document.getElementById("theme-select");
         if (themeSelect) themeSelect.value = getThemePreference();
+        const proxyInput = document.getElementById("food-proxy-input");
+        if (proxyInput) proxyInput.value = getCustomProxyBase();
         renderSettingsForm();
         renderSettingsVersion();
         view.style.display = "block";

@@ -110,6 +110,7 @@ Allt ligger i `localStorage`:
 | `bjorklundskolapp_store` | Barn, scheman, kontakter, lov och terminer |
 | `bjorklundskolapp_food_cache` | Veckans matsedel per RSS-flöde, nycklad på veckans måndagsdatum |
 | `bjorklundskolapp_food_proxy` | Vilken matproxy som fungerade senast |
+| `bjorklundskolapp_food_proxy_url` | Adress till egen matproxy (Cloudflare Worker) |
 | `bjorklundskolapp_theme` | Temaval |
 
 Appdatan har ett `source`-fält som styr om den får skrivas över:
@@ -121,11 +122,23 @@ Sparad data från äldre versioner saknar fältet och behandlas som `custom`, ef
 
 ## Matsedeln
 
-Skolmaten.se skickar `Access-Control-Allow-Origin` för sitt eget origin, så webbläsaren kan inte hämta flödet direkt — det måste gå via en CORS-proxy. Appen provar tre stycken i tur och ordning och kommer ihåg vilken som fungerade senast:
+Varje endpoint hos skolmaten.se låser `Access-Control-Allow-Origin` till sitt eget origin, så webbläsaren kan aldrig hämta flödet direkt från appen. Hämtningen måste ske någon annanstans.
 
-1. `api.codetabs.com`
-2. `api.allorigins.win`
-3. `corsproxy.io`
+Publika gratisproxyer visade sig otillräckliga — den 28 september 2026 slutade alla tre som appen använde att fungera samtidigt: `corsproxy.io` började kräva betald nyckel, `api.codetabs.com` vägrade anslutning och `api.allorigins.win` slutade svara. Därför går appen i första hand via en egen Cloudflare Worker.
+
+### Sätta upp proxyn
+
+Koden ligger i [worker/skolmat-proxy.js](worker/skolmat-proxy.js) och är låst i två led, eftersom adressen ligger i ett publikt repo: den hämtar bara från `skolmaten.se`, och den svarar bara med CORS-headers till de origin som står i `ALLOWED_ORIGINS`. Någon annan kan alltså varken använda den som öppen proxy mot valfri sajt eller läsa svaret från en egen sida.
+
+1. Skapa ett gratiskonto på [dash.cloudflare.com](https://dash.cloudflare.com) om du inte har ett.
+2. Gå till **Workers & Pages → Create → Start with Hello World** och skapa en worker.
+3. Klistra in hela innehållet i `worker/skolmat-proxy.js`, ersätt standardkoden och tryck **Deploy**.
+4. Kopiera adressen du får, t.ex. `https://skolmat.ditt-namn.workers.dev`.
+5. Klistra in den i appen under **⚙ → Allmänt → Matproxy** och tryck **SPARA & STÄNG**.
+
+Adressen sparas lokalt i webbläsaren, inte i repot, och måste därför anges en gång per enhet. Lämnas fältet tomt används de publika proxyerna, som också ligger kvar som reserv om workern skulle vara nere.
+
+Gratisnivån räcker med bred marginal: 100 000 anrop per dag, mot appens högst ett par per vecka och barn. Workern låter dessutom Cloudflare cacha svaret i en kvart.
 
 ### Cachen nycklas på veckan datan gäller
 
