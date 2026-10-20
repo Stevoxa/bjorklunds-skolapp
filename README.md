@@ -45,7 +45,8 @@ Enskilda delar kan importeras var för sig — schema, lov, terminer och kontakt
 ```json
 {
   "bundleVersion": 1,
-  "appVersion": "v51",
+  "appVersion": "v54",
+  "foodProxy": "https://skolmat-proxy.exempel.workers.dev",
   "children": [
     {
       "id": "elev_a",
@@ -87,6 +88,7 @@ Att tänka på:
 - Text inom parentes sist i `ämne` tolkas som sal: `"Matematik (A1)"` visas som ämnet *Matematik*, sal *A1*.
 - `lärare` är valfritt. Flera lärare skrivs som en sträng: `"Lärare A, Lärare B"`.
 - `datum` är alltid `YYYY-MM-DD`. `vecka` och `dag` i lov-posterna är metadata — appen matchar på `datum`.
+- `foodProxy` är valfritt och sätts vid import, så en ny enhet får matproxyn utan att den skrivs in för hand. Saknas fältet lämnas enhetens nuvarande inställning orörd.
 - Lovdagar anges **per dag**. Kalendervyn slår ihop sammanhängande datum till en period, så ta med mellanliggande helgdagar om ett lov ska visas som ett enda sammanhängande block.
 
 ### Delfiler
@@ -130,13 +132,36 @@ Publika gratisproxyer visade sig otillräckliga — den 28 september 2026 slutad
 
 Koden ligger i [worker/skolmat-proxy.js](worker/skolmat-proxy.js) och är låst i två led, eftersom adressen ligger i ett publikt repo: den hämtar bara från `skolmaten.se`, och den svarar bara med CORS-headers till de origin som står i `ALLOWED_ORIGINS`. Någon annan kan alltså varken använda den som öppen proxy mot valfri sajt eller läsa svaret från en egen sida.
 
-1. Skapa ett gratiskonto på [dash.cloudflare.com](https://dash.cloudflare.com) om du inte har ett.
-2. Gå till **Workers & Pages → Create → Start with Hello World** och skapa en worker.
-3. Klistra in hela innehållet i `worker/skolmat-proxy.js`, ersätt standardkoden och tryck **Deploy**.
-4. Kopiera adressen du får, t.ex. `https://skolmat.ditt-namn.workers.dev`.
-5. Klistra in den i appen under **⚙ → Allmänt → Matproxy** och tryck **SPARA & STÄNG**.
+Du behöver ett gratiskonto på [dash.cloudflare.com](https://dash.cloudflare.com). Sedan finns två vägar.
 
-Adressen sparas lokalt i webbläsaren, inte i repot, och måste därför anges en gång per enhet. Lämnas fältet tomt används de publika proxyerna, som också ligger kvar som reserv om workern skulle vara nere.
+**Från terminalen — två kommandon:**
+
+```bash
+cd worker
+npx wrangler login     # öppnar webbläsaren, klicka Allow
+npx wrangler deploy
+```
+
+`deploy` skriver ut adressen när den är klar, t.ex. `https://skolmat-proxy.ditt-konto.workers.dev`. Samma kommando används för att uppdatera workern senare.
+
+**Eller via Cloudflares gränssnitt:**
+
+1. **Workers & Pages → Create → Start with Hello World**
+2. Sätt namnet till `skolmat-proxy` och lämna *Protect with Cloudflare Access* **av** — slås den på kräver workern inloggning och appen får en inloggningssida i stället för matsedeln.
+3. Tryck **Deploy**. Att den först deployar mallens Hello World-kod är väntat; rutan *Worker preview* går inte att redigera.
+4. På workerns sida, klicka **Edit code** (`</>`), markera allt, klistra in innehållet i [worker/skolmat-proxy.js](worker/skolmat-proxy.js) och tryck **Deploy** igen.
+
+**Testa** genom att öppna adressen i en vanlig flik med en matsedel som mål:
+
+```
+DIN-ADRESS/?url=https%3A%2F%2Fskolmaten.se%2Fapi%2F4%2Frss%2Fweek%2FSKOLA%3Flocale%3Dsv
+```
+
+Kommer RSS-XML tillbaka fungerar den. Kommer `Hello World!` är koden inte utbytt än. Ett direktbesök i adressfältet skickar ingen `Origin`-header, så CORS-spärren slår inte till där — den gäller bara anrop från en webbsida.
+
+**Till sist:** klistra in adressen i appen under **⚙ → Allmänt → Matproxy** och tryck **SPARA & STÄNG**. Den följer sedan med i exporterade paket, så andra enheter får den vid import i stället för att behöva skrivas in på nytt. Lämnas fältet tomt används de publika proxyerna, som också ligger kvar som reserv om workern skulle vara nere.
+
+Står `ALLOWED_ORIGINS` i workern inte med den adress appen körs från blockeras svaret av webbläsaren. Standard är `https://stevoxa.github.io` plus `http://localhost:4173`.
 
 Gratisnivån räcker med bred marginal: 100 000 anrop per dag, mot appens högst ett par per vecka och barn. Workern låter dessutom Cloudflare cacha svaret i en kvart.
 

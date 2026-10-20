@@ -17,7 +17,10 @@
 
 const ALLOWED_ORIGINS = [
   "https://stevoxa.github.io",
-  "http://localhost:4173", // lokal utveckling
+  // Lokal utveckling. Måste matcha porten i .claude/launch.json, annars blockerar
+  // webbläsaren svaret när appen körs lokalt.
+  "http://localhost:5173",
+  "http://localhost:4173",
 ];
 
 const ALLOWED_HOST = "skolmaten.se";

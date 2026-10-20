@@ -38,3 +38,6 @@ skolapp-bundle*.json
 larare_kontakt*.json
 schema_mikaela*.json
 schema_robin*.json
+
+# Wranglers lokala cache (innehåller konto-id)
+.wrangler/

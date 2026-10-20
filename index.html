@@ -987,7 +987,10 @@
                 </button>
                 <pre class="help-code">{
   "bundleVersion": 1,                // paketversion (metadata)
-  "appVersion": "v51",             // metadata (matchar din appversion)
+  "appVersion": "v54",             // metadata (matchar din appversion)
+  "foodProxy": "https://...",      // valfritt: adress till egen matproxy.
+                                   // Sätts vid import, så en ny enhet slipper
+                                   // skriva in den under Installningar.
 
   "children": [                    // barn (i appen = samma som "Elev A/B")
     {
@@ -1145,7 +1148,7 @@
 <script>
     // Styr ENBART service worker-cachen och registreringens ?v=. Höj den vid varje
     // release - den påverkar inte sparad data.
-    const APP_VERSION = "v54";
+    const APP_VERSION = "v55";
 
     // Medvetet frikopplad från APP_VERSION. Låg nyckeln kvar på versionen raderades
     // allt importerat innehåll så fort versionen höjdes, vilket gjorde releaser
@@ -1442,6 +1445,10 @@
         return {
             bundleVersion: 1,
             appVersion: APP_VERSION,
+            // Följer med så att andra enheter slipper skriva in adressen för hand.
+            // Den är en enhetsinställning, inte appdata, och ligger därför utanför
+            // appState - men i paketet hör den hemma.
+            foodProxy: getCustomProxyBase(),
             children: appState.children.map((c, idx) => ({
                 id: getChildIdForBundle(c, idx),
                 name: c.name || "",
@@ -1519,6 +1526,7 @@
         return {
             bundleVersion: 1,
             appVersion: APP_VERSION,
+            foodProxy: "",
             children: [
                 {
                     id: "elev_a",
@@ -1561,6 +1569,17 @@
         storage.removeItem(STORAGE_KEY);
         storage.removeItem(FOOD_CACHE_KEY);
         storage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+
+        // Proxyadressen är en enhetsinställning men följer med i paketet, så att en
+        // ny telefon får den vid import i stället för att behöva skrivas in.
+        // Ett paket utan fältet lämnar nuvarande inställning orörd.
+        if (typeof bundle.foodProxy === "string") {
+            const base = bundle.foodProxy.trim().replace(/\/+$/, "");
+            if (base) storage.setItem(FOOD_PROXY_URL_KEY, base);
+            else storage.removeItem(FOOD_PROXY_URL_KEY);
+            storage.removeItem(FOOD_PROXY_PREF_KEY);
+            foodFailedUntil.clear();
+        }
 
         appState = normalized;
         renderApp();
