@@ -41,3 +41,6 @@ schema_robin*.json
 
 # Wranglers lokala cache (innehåller konto-id)
 .wrangler/
+
+# Lokal verktygskonfiguration
+.claude/

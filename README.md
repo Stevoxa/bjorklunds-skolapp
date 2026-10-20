@@ -45,7 +45,7 @@ Enskilda delar kan importeras var för sig — schema, lov, terminer och kontakt
 ```json
 {
   "bundleVersion": 1,
-  "appVersion": "v54",
+  "appVersion": "vNN",
   "foodProxy": "https://skolmat-proxy.exempel.workers.dev",
   "children": [
     {
@@ -88,6 +88,7 @@ Att tänka på:
 - Text inom parentes sist i `ämne` tolkas som sal: `"Matematik (A1)"` visas som ämnet *Matematik*, sal *A1*.
 - `lärare` är valfritt. Flera lärare skrivs som en sträng: `"Lärare A, Lärare B"`.
 - `datum` är alltid `YYYY-MM-DD`. `vecka` och `dag` i lov-posterna är metadata — appen matchar på `datum`.
+- `bundleVersion` och `appVersion` är metadata som skrivs vid export. Importen läser dem inte.
 - `foodProxy` är valfritt och sätts vid import, så en ny enhet får matproxyn utan att den skrivs in för hand. Saknas fältet lämnas enhetens nuvarande inställning orörd.
 - Lovdagar anges **per dag**. Kalendervyn slår ihop sammanhängande datum till en period, så ta med mellanliggande helgdagar om ett lov ska visas som ett enda sammanhängande block.
 
