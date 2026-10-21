@@ -1,0 +1,8 @@
+# Repot har inga npm-beroenden, så det enda som kan bli inaktuellt är versionerna
+# av de actions som workflowen använder.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

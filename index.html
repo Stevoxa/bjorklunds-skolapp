@@ -1145,10 +1145,438 @@
     <button type="button" class="schedule-close-btn" onclick="closeContactsView()">Stäng</button>
 </div>
 
+<script id="skolapp-core">
+/*
+ * Kärnlogik utan DOM- eller lagringsberoenden. Ligger i ett eget block så att
+ * testerna i tests/ kan köra exakt den här koden i Node, medan appen förblir en
+ * enda fil. En separat .js-fil hade service workern kunnat uppdatera vid ett annat
+ * tillfälle än index.html, och då hade gammal och ny kod kört mot varandra.
+ */
+(function (root) {
+    "use strict";
+
+    const WEEKDAYS = ["Måndag", "Tisdag", "Onsdag", "Torsdag", "Fredag"];
+    const WEEKEND = ["Lördag", "Söndag"];
+
+    function getSubjectBase(subject) {
+        const raw = String(subject || "");
+        const base = raw.split("(")[0].trim();
+        return base || "Okänt ämne";
+    }
+
+    function getSubjectRoom(subject) {
+        const raw = String(subject || "");
+        const match = raw.match(/\(([^)]+)\)\s*$/);
+        return match ? match[1].trim() : "";
+    }
+
+    // ISO-veckonummer.
+    function getWeek(d) {
+        const date = new Date(d.getTime());
+        date.setHours(0, 0, 0, 0);
+        date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
+        return 1 + Math.round(
+            ((date.getTime() - new Date(date.getFullYear(), 0, 4).getTime()) / 86400000
+            - 3
+            + (new Date(date.getFullYear(), 0, 4).getDay() + 6) % 7) / 7
+        );
+    }
+
+    function getLocalDateStr(date) {
+        return date.toLocaleDateString("sv-SE");
+    }
+
+    // Måndagens datum för veckan som `date` ligger i, t.ex. "2026-09-07". Används som
+    // cachenyckel för matsedeln. Måndagsdatum i stället för år+veckonummer, som annars
+    // ger fel nyckel kring nyår när ISO-veckan spänner över två år.
+    function getWeekStartStr(date) {
+        const d = new Date((date || new Date()).getTime());
+        d.setHours(12, 0, 0, 0);
+        d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+        return getLocalDateStr(d);
+    }
+
+    function skipWeekend(date, dir) {
+        while (date.getDay() === 0 || date.getDay() === 6) {
+            date.setDate(date.getDate() + (dir >= 0 ? 1 : -1));
+        }
+        return date;
+    }
+
+    function escapeHtml(value) {
+        return String(value ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    function parseTimeToMinutes(timeStr) {
+        if (!timeStr || typeof timeStr !== "string") return null;
+        const match = timeStr.trim().match(/^(\d{1,2})[.:](\d{1,2})$/);
+        if (!match) return null;
+
+        const hours = parseInt(match[1], 10);
+        const minutes = parseInt(match[2], 10);
+
+        if (Number.isNaN(hours) || Number.isNaN(minutes)) return null;
+        if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+
+        return hours * 60 + minutes;
+    }
+
+    function parseLessonRange(tid) {
+        if (!tid || typeof tid !== "string") return null;
+        const parts = tid.split("-");
+        if (parts.length < 2) return null;
+
+        const start = parseTimeToMinutes(parts[0]);
+        const end = parseTimeToMinutes(parts[1]);
+
+        if (start === null || end === null) return null;
+        return { start, end };
+    }
+
+    function getSortedLessons(lektioner) {
+        if (!Array.isArray(lektioner)) return [];
+        return [...lektioner].sort((a, b) => {
+            const aRange = parseLessonRange(a?.tid);
+            const bRange = parseLessonRange(b?.tid);
+            const aStart = aRange ? aRange.start : Number.MAX_SAFE_INTEGER;
+            const bStart = bRange ? bRange.start : Number.MAX_SAFE_INTEGER;
+            return aStart - bStart;
+        });
+    }
+
+    function getChildIdForBundle(child, idx) {
+        const rawId = (child && typeof child.id === "string") ? child.id.trim() : "";
+        if (rawId) return rawId;
+        const rawName = (child && typeof child.name === "string") ? child.name.trim() : "";
+        if (rawName) return rawName.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_\-]+/g, "");
+        return `child_${idx + 1}`;
+    }
+
+    // Vilken vecka ett matsedelsflöde gäller, utifrån posternas pubDate (midnatt GMT
+    // för respektive dag). UTC-delarna läses och blir en lokal middag, annars kan
+    // tidszonen flytta datumet till fel dygn.
+    function weekStartFromPubDates(pubDates) {
+        let earliest = null;
+        for (const raw of pubDates || []) {
+            if (!raw) continue;
+            const t = Date.parse(raw);
+            if (Number.isNaN(t)) continue;
+            if (earliest === null || t < earliest) earliest = t;
+        }
+        if (earliest === null) return null;
+        const d = new Date(earliest);
+        return getWeekStartStr(new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 12));
+    }
+
+    // Reserv när pubDate saknas: "Vecka NN" i titlarna godtas bara om numret är
+    // innevarande vecka - veckonumret ensamt upprepas ju varje år.
+    function weekStartFromTitles(titles, now) {
+        const m = (titles || []).join(" ").match(/vecka\s*(\d{1,2})/i);
+        if (m && parseInt(m[1], 10) === getWeek(now)) return getWeekStartStr(now);
+        return null;
+    }
+
+    function versionNumber(key) {
+        return parseInt(String(key).replace(/\D+/g, ""), 10) || 0;
+    }
+
+    // Flyttar data från versionsnycklar (t.ex. bjorklundskolapp_store_v51) till den
+    // stabila nyckeln. Finns flera vinner högst versionsnummer, och de gamla städas
+    // bort. Har den stabila nyckeln redan data rörs den inte. Lagringen tas emot som
+    // argument så att funktionen går att testa utan webbläsare.
+    // Returnerar nyckeln som data flyttades från, eller null.
+    function migrateStorageKey(storage, stableKey, legacyPattern) {
+        const legacyKeys = [];
+        for (let i = 0; i < storage.length; i++) {
+            const key = storage.key(i);
+            if (key && legacyPattern.test(key)) legacyKeys.push(key);
+        }
+        if (legacyKeys.length === 0) return null;
+
+        let migratedFrom = null;
+        if (!storage.getItem(stableKey)) {
+            legacyKeys.sort((a, b) => versionNumber(a) - versionNumber(b));
+            migratedFrom = legacyKeys[legacyKeys.length - 1];
+            const value = storage.getItem(migratedFrom);
+            if (value) storage.setItem(stableKey, value);
+        }
+        legacyKeys.forEach((k) => storage.removeItem(k));
+        return migratedFrom;
+    }
+
+    // ---- Validering vid import ------------------------------------------------
+    // Utan den här kontrollen gick fel data tyst igenom: en felstavad veckodag gav
+    // bara "Ingen skola idag" på den dagen, och en trasig tid sorterades sist utan
+    // förklaring. Alla fel samlas så att man ser allt på en gång.
+
+    const LESSON_TIME = /^\s*\d{1,2}[.:]\d{2}\s*-\s*\d{1,2}[.:]\d{2}\s*$/;
+
+    function normalizeWeekday(name) {
+        const n = String(name ?? "").trim().toLowerCase();
+        return WEEKDAYS.find((d) => d.toLowerCase() === n) || null;
+    }
+
+    function isValidDateStr(s) {
+        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s ?? ""));
+        if (!m) return false;
+        const y = +m[1];
+        const mo = +m[2];
+        const d = +m[3];
+        const dt = new Date(Date.UTC(y, mo - 1, d));
+        return dt.getUTCFullYear() === y && dt.getUTCMonth() === mo - 1 && dt.getUTCDate() === d;
+    }
+
+    // Skiljer på fel format och datum som inte finns - "2026-02-30" är korrekt
+    // skrivet, och att då säga åt användaren att skriva ÅÅÅÅ-MM-DD vore missvisande.
+    function dateProblem(value) {
+        const raw = String(value ?? "");
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return `datumet "${raw}" ska skrivas ÅÅÅÅ-MM-DD.`;
+        return isValidDateStr(raw) ? null : `datumet "${raw}" finns inte.`;
+    }
+
+    // Returnerar { schema, problems }. Veckodagar normaliseras till "Måndag"-form.
+    function validateSchema(schema, label) {
+        const problems = [];
+        const prefix = label ? `${label} · ` : "";
+        const days = Array.isArray(schema)
+            ? schema
+            : (schema && typeof schema === "object" && Array.isArray(schema.schema) ? schema.schema : null);
+
+        if (!days) {
+            problems.push(`${prefix}schemat saknar listan "schema".`);
+            return { schema, problems };
+        }
+
+        const seen = new Set();
+        const normalizedDays = days.map((day, dIdx) => {
+            if (!day || typeof day !== "object") {
+                problems.push(`${prefix}dag ${dIdx + 1} är inte ett objekt.`);
+                return day;
+            }
+
+            const canonical = normalizeWeekday(day.dag);
+            const dayLabel = canonical || `"${day.dag ?? ""}"`;
+            if (!canonical) {
+                const raw = String(day.dag ?? "").trim().toLowerCase();
+                const isWeekend = WEEKEND.some((w) => w.toLowerCase() === raw);
+                problems.push(isWeekend
+                    ? `${prefix}${dayLabel}: appen visar inte helger, ta bort dagen.`
+                    : `${prefix}okänd veckodag ${dayLabel} — använd Måndag–Fredag.`);
+            } else if (seen.has(canonical)) {
+                problems.push(`${prefix}${canonical} förekommer två gånger — bara den första skulle visas.`);
+            } else {
+                seen.add(canonical);
+            }
+
+            if (!Array.isArray(day.lektioner)) {
+                problems.push(`${prefix}${dayLabel}: "lektioner" saknas eller är inte en lista.`);
+            } else {
+                day.lektioner.forEach((l, lIdx) => {
+                    const where = `${prefix}${dayLabel}, lektion ${lIdx + 1}`;
+                    if (!l || typeof l !== "object") {
+                        problems.push(`${where}: är inte ett objekt.`);
+                        return;
+                    }
+                    if (!String(l.ämne ?? "").trim()) problems.push(`${where}: "ämne" saknas.`);
+
+                    const tid = String(l.tid ?? "");
+                    const range = LESSON_TIME.test(tid) ? parseLessonRange(tid) : null;
+                    if (!range) {
+                        problems.push(`${where}: tiden "${tid}" har fel format — skriv t.ex. 08.30-09.25.`);
+                    } else if (range.end <= range.start) {
+                        problems.push(`${where}: sluttiden i "${tid}" ligger inte efter starttiden.`);
+                    }
+                });
+            }
+
+            return canonical ? { ...day, dag: canonical } : day;
+        });
+
+        const normalized = Array.isArray(schema) ? normalizedDays : { ...schema, schema: normalizedDays };
+        return { schema: normalized, problems };
+    }
+
+    function validateLov(lov) {
+        if (!lov || typeof lov !== "object" || Array.isArray(lov)) {
+            return {
+                lov: { lov: [], helgdagar: [] },
+                problems: ['Lov måste vara ett objekt med "lov" och/eller "helgdagar".']
+            };
+        }
+
+        const problems = [];
+        const out = { lov: [], helgdagar: [] };
+        for (const [key, label] of [["lov", "Lov"], ["helgdagar", "Helgdag"]]) {
+            const list = lov[key];
+            if (list === undefined) continue;
+            if (!Array.isArray(list)) {
+                problems.push(`"${key}" måste vara en lista.`);
+                continue;
+            }
+            list.forEach((e, i) => {
+                if (!e || typeof e !== "object") {
+                    problems.push(`${label} ${i + 1}: är inte ett objekt.`);
+                    return;
+                }
+                const dp = dateProblem(e.datum);
+                if (dp) problems.push(`${label} ${i + 1}: ${dp}`);
+            });
+            out[key] = list;
+        }
+        return { lov: out, problems };
+    }
+
+    function validateTerms(terms) {
+        if (!Array.isArray(terms)) return { terms: [], problems: ["Terminer måste vara en lista."] };
+
+        const problems = [];
+        terms.forEach((t, i) => {
+            const label = (t && t.termin) ? `"${t.termin}"` : `Termin ${i + 1}`;
+            if (!t || typeof t !== "object") {
+                problems.push(`${label}: är inte ett objekt.`);
+                return;
+            }
+            for (const key of ["skolstart", "skolavslutning"]) {
+                if (t[key] === undefined) continue;
+                if (!Array.isArray(t[key])) {
+                    problems.push(`${label}: "${key}" måste vara en lista.`);
+                    continue;
+                }
+                t[key].forEach((e, j) => {
+                    const dp = dateProblem(e && e.datum);
+                    if (dp) problems.push(`${label}, ${key} ${j + 1}: ${dp}`);
+                });
+            }
+        });
+        return { terms, problems };
+    }
+
+    function validateContacts(list, label) {
+        const prefix = label ? `${label} · ` : "";
+        if (!Array.isArray(list)) {
+            return { contacts: [], problems: [`${prefix}kontaktlistan måste vara en lista.`] };
+        }
+        const problems = [];
+        const contacts = [];
+        list.forEach((k, i) => {
+            if (!k || typeof k !== "object") {
+                problems.push(`${prefix}kontakt ${i + 1} är inte ett objekt.`);
+                return;
+            }
+            contacts.push({
+                name: String(k.name ?? "").trim(),
+                email: String(k.email ?? "").trim(),
+                mobile: String(k.mobile ?? "").trim()
+            });
+        });
+        return { contacts, problems };
+    }
+
+    function formatProblems(problems, max = 8) {
+        const head = problems.length === 1 ? "1 fel hittades:" : `${problems.length} fel hittades:`;
+        const shown = problems.slice(0, max).map((p) => `• ${p}`).join("\n");
+        const more = problems.length > max ? `\n…och ${problems.length - max} till.` : "";
+        return `${head}\n${shown}${more}`;
+    }
+
+    function problemsError(problems) {
+        const err = new Error(formatProblems(problems));
+        err.problems = problems;
+        return err;
+    }
+
+    // Kontrollerar och normaliserar ett helt paket. Kastar ett fel med alla problem
+    // listade, eller returnerar { children, lov, terms }.
+    function normalizeBundle(bundle) {
+        if (!bundle || typeof bundle !== "object" || Array.isArray(bundle)) {
+            throw problemsError(["Paketet är inte ett JSON-objekt."]);
+        }
+        if (!Array.isArray(bundle.children) || bundle.children.length === 0) {
+            throw problemsError(['Paketet saknar "children" (minst ett barn).']);
+        }
+
+        const problems = [];
+        const children = bundle.children.map((c, idx) => {
+            if (!c || typeof c !== "object") {
+                problems.push(`Barn ${idx + 1} är inte ett objekt.`);
+                return null;
+            }
+            const name = String(c.name ?? "").trim();
+            const label = name || `Barn ${idx + 1}`;
+            if (!name) problems.push(`${label}: "name" saknas.`);
+            if (!c.schema || typeof c.schema !== "object") {
+                problems.push(`${label}: "schema" saknas.`);
+                return null;
+            }
+
+            const s = validateSchema(c.schema, label);
+            problems.push(...s.problems);
+
+            // Äldre paket kunde ha en gemensam kontaktlista när det bara fanns ett barn.
+            const contactsRaw = Array.isArray(c.contacts)
+                ? c.contacts
+                : (Array.isArray(bundle.larare_kontakt) && bundle.children.length === 1 ? bundle.larare_kontakt : []);
+            const k = validateContacts(contactsRaw, label);
+            problems.push(...k.problems);
+
+            const id = (typeof c.id === "string" && c.id.trim()) ? c.id.trim() : getChildIdForBundle({ name }, idx);
+            return { id, name, rss: String(c.rss ?? "").trim(), schema: s.schema, contacts: k.contacts };
+        });
+
+        const l = validateLov(bundle.lov === undefined ? {} : bundle.lov);
+        problems.push(...l.problems);
+        const t = validateTerms(bundle.terms === undefined ? [] : bundle.terms);
+        problems.push(...t.problems);
+
+        if (problems.length) throw problemsError(problems);
+        return { children, lov: l.lov, terms: t.terms };
+    }
+
+    root.SkolappCore = Object.freeze({
+        WEEKDAYS,
+        getSubjectBase,
+        getSubjectRoom,
+        getWeek,
+        getLocalDateStr,
+        getWeekStartStr,
+        skipWeekend,
+        escapeHtml,
+        parseTimeToMinutes,
+        parseLessonRange,
+        getSortedLessons,
+        getChildIdForBundle,
+        weekStartFromPubDates,
+        weekStartFromTitles,
+        migrateStorageKey,
+        normalizeWeekday,
+        isValidDateStr,
+        validateSchema,
+        validateLov,
+        validateTerms,
+        validateContacts,
+        formatProblems,
+        normalizeBundle
+    });
+})(globalThis);
+</script>
+
 <script>
+    const {
+        getSubjectBase, getSubjectRoom, getWeek, getLocalDateStr, getWeekStartStr,
+        skipWeekend, escapeHtml, parseTimeToMinutes, parseLessonRange, getSortedLessons,
+        getChildIdForBundle, weekStartFromPubDates, weekStartFromTitles, migrateStorageKey,
+        validateSchema, validateLov, validateTerms, validateContacts, formatProblems,
+        normalizeBundle
+    } = SkolappCore;
+
     // Styr ENBART service worker-cachen och registreringens ?v=. Höj den vid varje
     // release - den påverkar inte sparad data.
-    const APP_VERSION = "v55";
+    const APP_VERSION = "v56";
 
     // Medvetet frikopplad från APP_VERSION. Låg nyckeln kvar på versionen raderades
     // allt importerat innehåll så fort versionen höjdes, vilket gjorde releaser
@@ -1195,17 +1623,7 @@
         "#ff7675"  // röd
     ];
 
-    function getSubjectBase(subject) {
-        const raw = String(subject || "");
-        const base = raw.split("(")[0].trim();
-        return base || "Okänt ämne";
-    }
 
-    function getSubjectRoom(subject) {
-        const raw = String(subject || "");
-        const match = raw.match(/\(([^)]+)\)\s*$/);
-        return match ? match[1].trim() : "";
-    }
 
     function hideSettingsViewDom() {
         const view = document.getElementById("settings-view");
@@ -1296,73 +1714,12 @@
         });
     })();
 
-    function getWeek(d) {
-        const date = new Date(d.getTime());
-        date.setHours(0, 0, 0, 0);
-        date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
-        return 1 + Math.round(
-            ((date.getTime() - new Date(date.getFullYear(), 0, 4).getTime()) / 86400000
-            - 3
-            + (new Date(date.getFullYear(), 0, 4).getDay() + 6) % 7) / 7
-        );
-    }
 
-    function getLocalDateStr(date) {
-        return date.toLocaleDateString("sv-SE");
-    }
 
-    function skipWeekend(date, dir) {
-        while (date.getDay() === 0 || date.getDay() === 6) {
-            date.setDate(date.getDate() + (dir >= 0 ? 1 : -1));
-        }
-        return date;
-    }
 
-    function escapeHtml(value) {
-        return String(value ?? "")
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#039;");
-    }
 
-    function parseTimeToMinutes(timeStr) {
-        if (!timeStr || typeof timeStr !== "string") return null;
-        const match = timeStr.trim().match(/^(\d{1,2})[.:](\d{1,2})$/);
-        if (!match) return null;
 
-        const hours = parseInt(match[1], 10);
-        const minutes = parseInt(match[2], 10);
 
-        if (Number.isNaN(hours) || Number.isNaN(minutes)) return null;
-        if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
-
-        return hours * 60 + minutes;
-    }
-
-    function parseLessonRange(tid) {
-        if (!tid || typeof tid !== "string") return null;
-        const parts = tid.split("-");
-        if (parts.length < 2) return null;
-
-        const start = parseTimeToMinutes(parts[0]);
-        const end = parseTimeToMinutes(parts[1]);
-
-        if (start === null || end === null) return null;
-        return { start, end };
-    }
-
-    function getSortedLessons(lektioner) {
-        if (!Array.isArray(lektioner)) return [];
-        return [...lektioner].sort((a, b) => {
-            const aRange = parseLessonRange(a?.tid);
-            const bRange = parseLessonRange(b?.tid);
-            const aStart = aRange ? aRange.start : Number.MAX_SAFE_INTEGER;
-            const bStart = bRange ? bRange.start : Number.MAX_SAFE_INTEGER;
-            return aStart - bStart;
-        });
-    }
 
     function getDefaultAppState() {
         return {
@@ -1429,13 +1786,6 @@
         alert(successMessage);
     }
 
-    function getChildIdForBundle(child, idx) {
-        const rawId = (child && typeof child.id === "string") ? child.id.trim() : "";
-        if (rawId) return rawId;
-        const rawName = (child && typeof child.name === "string") ? child.name.trim() : "";
-        if (rawName) return rawName.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_\-]+/g, "");
-        return `child_${idx + 1}`;
-    }
 
     function createBundleFromAppState() {
         if (!appState || !Array.isArray(appState.children)) {
@@ -1463,62 +1813,8 @@
     }
 
     function validateAndNormalizeBundle(bundle) {
-        if (!bundle || typeof bundle !== "object") {
-            throw new Error("Bundle är inte ett JSON-objekt.");
-        }
-
-        if (!Array.isArray(bundle.children) || bundle.children.length === 0) {
-            throw new Error('Bundle saknar "children" (minst ett barn).');
-        }
-
-        const normalizedChildren = bundle.children.map((c, idx) => {
-            if (!c || typeof c !== "object") {
-                throw new Error(`Barn #${idx + 1} är inte ett objekt.`);
-            }
-            const name = String(c.name ?? "").trim();
-            if (!name) throw new Error(`Barn #${idx + 1} saknar "name".`);
-
-            const rss = String(c.rss ?? "").trim();
-
-            const schema = c.schema;
-            if (!schema || typeof schema !== "object") {
-                throw new Error(`Barn "${name}" saknar "schema" (objekt).`);
-            }
-
-            const id = (typeof c.id === "string" && c.id.trim()) ? c.id.trim() : getChildIdForBundle({ name }, idx);
-            // Kontakter per barn (larare_kontakt-format = JSON-array)
-            const contactsRaw = Array.isArray(c.contacts)
-                ? c.contacts
-                : (Array.isArray(bundle.larare_kontakt) && bundle.children.length === 1 ? bundle.larare_kontakt : []);
-
-            const contacts = contactsRaw.map((k, cIdx) => {
-                if (!k || typeof k !== "object") {
-                    throw new Error(`Kontakt #${cIdx + 1} för "${name}" är inte ett objekt.`);
-                }
-                return {
-                    name: String(k.name ?? "").trim(),
-                    email: String(k.email ?? "").trim(),
-                    mobile: String(k.mobile ?? "").trim()
-                };
-            });
-
-            return { id, name, rss, schema, contacts };
-        });
-
-        const lovIn = bundle.lov || {};
-        const lovList = Array.isArray(lovIn.lov) ? lovIn.lov : [];
-        const helgdagarList = Array.isArray(lovIn.helgdagar) ? lovIn.helgdagar : [];
-        const lov = { lov: lovList, helgdagar: helgdagarList };
-
-        const terms = Array.isArray(bundle.terms) ? bundle.terms : [];
-
-        return {
-            // Importerad data är användarens egen och ska aldrig ersättas av seed-filerna.
-            source: SOURCE_CUSTOM,
-            children: normalizedChildren,
-            lov,
-            terms
-        };
+        // Importerad data är användarens egen och ska aldrig ersättas av seed-filerna.
+        return Object.assign({ source: SOURCE_CUSTOM }, normalizeBundle(bundle));
     }
 
     function getEmptyBundleTemplate() {
@@ -1761,39 +2057,11 @@
         console.info("Medföljande schema/lov/terminer uppdaterade.");
     }
 
-    // Flyttar data från de gamla versionsnycklarna (bjorklundskolapp_store_v51 osv)
-    // till den stabila nyckeln. Finns flera tas den med högst versionsnummer, och
-    // de gamla städas bort. Gör inget om den stabila nyckeln redan har data.
+    // Flyttar data från gamla versionsnycklar till den stabila, se migrateStorageKey.
     function migrateVersionedStorageKey() {
         try {
-            if (storage.getItem(STORAGE_KEY)) {
-                // Redan migrerad - rensa bara eventuella kvarvarande gamla nycklar.
-                for (let i = storage.length - 1; i >= 0; i--) {
-                    const key = storage.key(i);
-                    if (key && LEGACY_STORAGE_KEY_PATTERN.test(key)) storage.removeItem(key);
-                }
-                return;
-            }
-
-            const legacyKeys = [];
-            for (let i = 0; i < storage.length; i++) {
-                const key = storage.key(i);
-                if (key && LEGACY_STORAGE_KEY_PATTERN.test(key)) legacyKeys.push(key);
-            }
-            if (legacyKeys.length === 0) return;
-
-            legacyKeys.sort((a, b) => {
-                const na = parseInt(a.replace(/\D+/g, ""), 10) || 0;
-                const nb = parseInt(b.replace(/\D+/g, ""), 10) || 0;
-                return na - nb;
-            });
-
-            const newest = legacyKeys[legacyKeys.length - 1];
-            const value = storage.getItem(newest);
-            if (value) storage.setItem(STORAGE_KEY, value);
-
-            legacyKeys.forEach((k) => storage.removeItem(k));
-            console.info(`Sparad data flyttad från ${newest} till ${STORAGE_KEY}.`);
+            const from = migrateStorageKey(storage, STORAGE_KEY, LEGACY_STORAGE_KEY_PATTERN);
+            if (from) console.info(`Sparad data flyttad från ${from} till ${STORAGE_KEY}.`);
         } catch (e) {
             console.warn("Kunde inte migrera sparad data.", e);
         }
@@ -2175,16 +2443,6 @@
         }
     }
 
-    // Måndagens datum för veckan som `date` ligger i, t.ex. "2026-09-07".
-    // Används som cachenyckel: RSS-flödet är ett veckoflöde, så en hämtning
-    // per vecka räcker. (Måndagsdatum istället för år+veckonummer, som annars
-    // ger fel nyckel kring nyår när ISO-veckan spänner över två år.)
-    function getWeekStartStr(date) {
-        const d = new Date((date || new Date()).getTime());
-        d.setHours(12, 0, 0, 0);
-        d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
-        return getLocalDateStr(d);
-    }
 
     // Vilken vecka flödets innehåll FAKTISKT gäller. Varje post har pubDate satt
     // till sin egen dag (midnatt GMT), så måndagen i den veckan identifierar
@@ -2196,35 +2454,12 @@
     // veckan, och visas sedan som om den vore aktuell.
     function getFeedWeekStart(xmlText) {
         if (!xmlText || !xmlText.includes("<rss")) return null;
-
         try {
             const xml = new DOMParser().parseFromString(xmlText, "text/xml");
             if (xml.querySelector("parsererror")) return null;
-
-            let earliest = null;
-            xml.querySelectorAll("item").forEach((item) => {
-                const raw = item.querySelector("pubDate")?.textContent;
-                if (!raw) return;
-                const t = Date.parse(raw);
-                if (Number.isNaN(t)) return;
-                if (earliest === null || t < earliest) earliest = t;
-            });
-
-            if (earliest !== null) {
-                // pubDate är midnatt GMT. Läs UTC-delarna och bygg en lokal middag,
-                // annars kan tidszonen putta datumet till fel dygn.
-                const d = new Date(earliest);
-                return getWeekStartStr(new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 12));
-            }
-
-            // Saknas pubDate: lita på "Vecka NN" i titeln bara om den matchar
-            // innevarande vecka - veckonumret ensamt upprepas ju varje år.
-            const titles = [...xml.querySelectorAll("item")]
-                .map((i) => (i.querySelector("title")?.textContent || "")).join(" ");
-            const m = titles.match(/vecka\s*(\d{1,2})/i);
-            if (m && parseInt(m[1], 10) === getWeek(new Date())) return getWeekStartStr(new Date());
-
-            return null;
+            const items = [...xml.querySelectorAll("item")];
+            return weekStartFromPubDates(items.map((i) => i.querySelector("pubDate")?.textContent || ""))
+                || weekStartFromTitles(items.map((i) => i.querySelector("title")?.textContent || ""), new Date());
         } catch {
             return null;
         }
@@ -3108,7 +3343,7 @@
                     renderSettingsForm(); // uppdatera UI för ev. ändrat antal barn
                     alert("Paket importerat.");
                 } catch (e) {
-                    alert("Ogiltigt paket: " + (e && e.message ? e.message : String(e)));
+                    alert("Kunde inte importera paketet.\n\n" + (e && e.message ? e.message : String(e)));
                 } finally {
                     // reset så samma fil kan importeras igen om man vill
                     bundleFile.value = "";
@@ -3187,13 +3422,12 @@
                 r.onload = function () {
                     try {
                         const data = JSON.parse(r.result);
-                        if (!data || typeof data !== "object") {
-                            throw new Error("Schemat måste vara ett JSON-objekt eller en array.");
-                        }
-                        appState.children[i].schema = data;
+                        const checked = validateSchema(data, appState.children[i].name);
+                        if (checked.problems.length) throw new Error(formatProblems(checked.problems));
+                        appState.children[i].schema = checked.schema;
                         commitPartialImport("Schema importerat och sparat.");
                     } catch (e) {
-                        alert("Ogiltig JSON: " + e.message);
+                        alert("Kunde inte importera.\n\n" + e.message);
                     }
                 };
                 r.readAsText(f);
@@ -3246,17 +3480,12 @@
             const r = new FileReader();
             r.onload = function () {
                 try {
-                    const parsed = JSON.parse(r.result);
-                    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-                        throw new Error('Lov måste vara ett objekt med "lov" och/eller "helgdagar".');
-                    }
-                    appState.lov = {
-                        lov: Array.isArray(parsed.lov) ? parsed.lov : [],
-                        helgdagar: Array.isArray(parsed.helgdagar) ? parsed.helgdagar : []
-                    };
+                    const checked = validateLov(JSON.parse(r.result));
+                    if (checked.problems.length) throw new Error(formatProblems(checked.problems));
+                    appState.lov = checked.lov;
                     commitPartialImport("Lov importerat och sparat.");
                 } catch (e) {
-                    alert("Ogiltig JSON: " + e.message);
+                    alert("Kunde inte importera.\n\n" + e.message);
                 }
             };
             r.readAsText(f);
@@ -3297,14 +3526,12 @@
             const r = new FileReader();
             r.onload = function () {
                 try {
-                    const parsed = JSON.parse(r.result);
-                    if (!Array.isArray(parsed)) {
-                        throw new Error("Terminer måste vara en JSON-array.");
-                    }
-                    appState.terms = parsed;
+                    const checked = validateTerms(JSON.parse(r.result));
+                    if (checked.problems.length) throw new Error(formatProblems(checked.problems));
+                    appState.terms = checked.terms;
                     commitPartialImport("Terminer importerade och sparade.");
                 } catch (e) {
-                    alert("Ogiltig JSON: " + e.message);
+                    alert("Kunde inte importera.\n\n" + e.message);
                 }
             };
             r.readAsText(f);
@@ -3357,24 +3584,12 @@
                 const r = new FileReader();
                 r.onload = function () {
                     try {
-                        const parsed = JSON.parse(r.result);
-                        if (!Array.isArray(parsed)) {
-                            throw new Error("Kontaktlistan måste vara en JSON-array.");
-                        }
-                        const normalized = parsed.map((c, idx) => {
-                            if (!c || typeof c !== "object") {
-                                throw new Error(`Kontakt #${idx + 1} är inte ett objekt.`);
-                            }
-                            return {
-                                name: String(c.name ?? "").trim(),
-                                email: String(c.email ?? "").trim(),
-                                mobile: String(c.mobile ?? "").trim()
-                            };
-                        });
-                        appState.children[i].contacts = normalized;
+                        const checked = validateContacts(JSON.parse(r.result));
+                        if (checked.problems.length) throw new Error(formatProblems(checked.problems));
+                        appState.children[i].contacts = checked.contacts;
                         commitPartialImport("Kontaktlista importerad och sparad för " + (appState.children[i].name || `barn ${i + 1}`) + ".");
                     } catch (e) {
-                        alert("Ogiltig JSON: " + e.message);
+                        alert("Kunde inte importera.\n\n" + e.message);
                     }
                 };
                 r.readAsText(f);

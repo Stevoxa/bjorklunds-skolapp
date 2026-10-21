@@ -1,0 +1,33 @@
+name: Tester
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Appen används i Sverige, så testerna körs i svensk tid.
+      - name: Tester (Europe/Stockholm)
+        run: node --test "tests/*.test.*"
+        env:
+          TZ: Europe/Stockholm
+
+      # Matsedelns veckonyckel läses ur pubDate, som är midnatt GMT. En tidszon bakom
+      # UTC flyttar då datumet till föregående dygn om koden inte hanterar det -
+      # därför körs samma tester en gång till här.
+      - name: Tester (America/New_York)
+        run: node --test "tests/*.test.*"
+        env:
+          TZ: America/New_York
