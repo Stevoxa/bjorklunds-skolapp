@@ -641,6 +641,12 @@
             font-style: italic;
         }
 
+        /* #555/#666 ovan är skrivna för ljus bakgrund och blev nästan osynliga i mörkt läge. */
+        [data-theme="dark"] .lesson-time,
+        [data-theme="dark"] .lesson-teacher {
+            color: var(--muted-text);
+        }
+
         .teacher-name-link {
             cursor: pointer;
             color: inherit; /* match lesson text color */
@@ -1576,7 +1582,7 @@
 
     // Styr ENBART service worker-cachen och registreringens ?v=. Höj den vid varje
     // release - den påverkar inte sparad data.
-    const APP_VERSION = "v56";
+    const APP_VERSION = "v57";
 
     // Medvetet frikopplad från APP_VERSION. Låg nyckeln kvar på versionen raderades
     // allt importerat innehåll så fort versionen höjdes, vilket gjorde releaser
@@ -2915,7 +2921,7 @@
             }
             if (e.startDate && e.endDate) {
                 w = getWeek(new Date(e.startDate + "T12:00:00"));
-                dateLabel = e.startDate === e.endDate ? e.startDate : `${e.startDate}-${e.endDate}`;
+                dateLabel = e.startDate === e.endDate ? e.startDate : `${e.startDate} – ${e.endDate}`;
             } else {
                 w = getWeek(new Date(e.date + "T12:00:00"));
                 dateLabel = e.date;

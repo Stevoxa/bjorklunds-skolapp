@@ -1,14 +1,29 @@
 # Björklunds Skolapp
 
+[![Tester](https://github.com/Stevoxa/bjorklunds-skolapp/actions/workflows/tests.yml/badge.svg)](https://github.com/Stevoxa/bjorklunds-skolapp/actions/workflows/tests.yml)
+
 En liten PWA som samlar barnens skoldag på ett ställe: schema, pågående lektion, skollov, terminsdatum, skolmat och kontaktuppgifter till personalen.
 
 **Live:** https://stevoxa.github.io/bjorklunds-skolapp/
 
-Appen är byggd för mobil, fungerar offline och kan installeras på hemskärmen. All data ligger lokalt i webbläsaren — det finns ingen server och inget konto.
+Appen är byggd för mobil, fungerar offline och kan installeras på hemskärmen. All data ligger lokalt i webbläsaren och det finns inget konto.
 
-<img src="docs/skarmbild-dagsvy.png" alt="Dagsvyn i mörkt läge: två elevkort med skoltider, pågående respektive nästa lektion, och menyraden längst ner" width="320">
+<p>
+<img src="docs/skarmbild-dagsvy.png" alt="Dagsvyn: två elevkort med skoltider och pågående respektive nästa lektion" width="200">
+<img src="docs/skarmbild-schema.png" alt="Schemavyn: dagens lektioner för ett barn, färgkodade per ämne, med tid, sal och lärare" width="200">
+<img src="docs/skarmbild-matsedel.png" alt="Matsedeln: veckans lunch för båda barnen, dag för dag" width="200">
+<img src="docs/skarmbild-lov.png" alt="Lovlistan: terminsstarter, lovperioder och helgdagar grupperade per vecka" width="200">
+</p>
 
 > Datan i repot är avsiktligt anonymiserade exempel ("Elev A", "Lärare Exempel 1"). Riktiga scheman och kontaktuppgifter läggs in genom import i appen och ska aldrig committas — se [.gitignore](.gitignore).
+
+## Hur den är byggd
+
+- **En fil, inget byggsteg.** Hela appen är `index.html` med CSS och JavaScript inline. Inga beroenden, ingen paketerare.
+- **Offline först.** En service worker cachar appen och visar en ruta när en ny version finns — redan vid samma start.
+- **Egen proxy för matsedeln.** Skolmaten.se tillåter inte anrop från andra webbplatser, så menyn hämtas via en liten [Cloudflare Worker](worker/skolmat-proxy.js) som bara får hämta från skolmaten.se och bara svarar appens domän.
+- **Matsedeln cachas på veckan den gäller** — läst ur flödets datum, inte ur klockan. Skolor publicerar ofta nästa vecka sent, och då ska förra veckans meny inte visas som aktuell.
+- **Testad kärna.** Datum- och veckologik, importvalidering och proxyns spärrar testas i CI, även i en tidszon bakom UTC.
 
 ## Funktioner
 
@@ -88,6 +103,7 @@ Att tänka på:
 - Text inom parentes sist i `ämne` tolkas som sal: `"Matematik (A1)"` visas som ämnet *Matematik*, sal *A1*.
 - `lärare` är valfritt. Flera lärare skrivs som en sträng: `"Lärare A, Lärare B"`.
 - `datum` är alltid `YYYY-MM-DD`. `vecka` och `dag` i lov-posterna är metadata — appen matchar på `datum`.
+- Importen kontrolleras innan något sparas. Är något fel — en felstavad veckodag, en tid som `8.5-9`, ett datum som inte finns — avvisas importen med en lista över varje fel och var det sitter, och befintlig data lämnas orörd.
 - `bundleVersion` och `appVersion` är metadata som skrivs vid export. Importen läser dem inte.
 - `foodProxy` är valfritt och sätts vid import, så en ny enhet får matproxyn utan att den skrivs in för hand. Saknas fältet lämnas enhetens nuvarande inställning orörd.
 - Lovdagar anges **per dag**. Kalendervyn slår ihop sammanhängande datum till en period, så ta med mellanliggande helgdagar om ett lov ska visas som ett enda sammanhängande block.
@@ -189,11 +205,23 @@ Det här är appens svagaste punkt — den är beroende av gratistjänster som l
 
 ## Teknik
 
-Inget byggsteg, inga beroenden, ingen paketerare. Hela appen är [index.html](index.html) med CSS och JavaScript inline, plus [sw.js](sw.js) och [manifest.json](manifest.json). Öppna filen i en webbläsare via en statisk server så kör den.
+Inget byggsteg, inga beroenden, ingen paketerare. Hela appen är [index.html](index.html) med CSS och JavaScript inline, plus [sw.js](sw.js) och [manifest.json](manifest.json). Kör den via valfri statisk server:
 
 ```bash
-python -m http.server 4173
+python -m http.server 5173
 ```
+
+### Tester
+
+Kärnlogiken — veckonummer, matsedelns veckonyckel, tidsparsning, migrering och importvalidering — ligger i ett eget block, `<script id="skolapp-core">`, utan beroenden till DOM eller lagring. Testerna plockar ut just det blocket ur `index.html` och kör det i Node, så de testar exakt den kod appen kör.
+
+En separat `.js`-fil hade varit enklare att testa, men då hade service workern kunnat uppdatera den vid ett annat tillfälle än `index.html`, och gammal och ny kod hade kört mot varandra.
+
+```bash
+node --test "tests/*.test.*"
+```
+
+Inga paket behöver installeras. CI kör testerna vid varje push, två gånger: i svensk tid och i New York-tid, eftersom matsedelns veckonyckel annars kan hamna på fel dygn i en tidszon bakom UTC.
 
 ### Service worker
 
@@ -219,12 +247,20 @@ Längst ned i inställningarna står vilken version som körs, med en knapp som 
 ## Filer
 
 ```
-index.html          hela appen — CSS och JS inline
+index.html          hela appen — CSS och JS inline, kärnlogiken i ett eget block
 sw.js               service worker, offline och caching
 manifest.json       PWA-manifest
 image/              appikoner, 192 och 512 px
+docs/               skärmbilder
+worker/             Cloudflare Worker som hämtar matsedeln
+tests/              tester för kärnlogiken och proxyn
+.github/            CI och Dependabot
 schema_elev_a.json  exempelschema
 schema_elev_b.json  exempelschema
 lov_helg.json       exempel på lov och helgdagar
 termin.json         exempel på terminsdatum
 ```
+
+## Licens
+
+[MIT](LICENSE)

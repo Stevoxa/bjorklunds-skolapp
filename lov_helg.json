@@ -1,18 +1,234 @@
 {
   "lov": [
-    { "datum": "2026-02-23", "vecka": 9, "dag": "Måndag", "beskrivning": "Exempel-lov" },
-    { "datum": "2026-02-24", "vecka": 9, "dag": "Tisdag", "beskrivning": "Exempel-lov" },
-    { "datum": "2026-02-25", "vecka": 9, "dag": "Onsdag", "beskrivning": "Exempel-lov" },
-    { "datum": "2026-02-26", "vecka": 9, "dag": "Torsdag", "beskrivning": "Exempel-lov" },
-    { "datum": "2026-02-27", "vecka": 9, "dag": "Fredag", "beskrivning": "Exempel-lov" },
-    { "datum": "2026-04-07", "vecka": 15, "dag": "Tisdag", "beskrivning": "Exempel-lov (vår)" },
-    { "datum": "2026-04-08", "vecka": 15, "dag": "Onsdag", "beskrivning": "Exempel-lov (vår)" },
-    { "datum": "2026-04-09", "vecka": 15, "dag": "Torsdag", "beskrivning": "Exempel-lov (vår)" },
-    { "datum": "2026-04-10", "vecka": 15, "dag": "Fredag", "beskrivning": "Exempel-lov (vår)" }
+    {
+      "datum": "2026-10-26",
+      "vecka": 44,
+      "dag": "Måndag",
+      "beskrivning": "Höstlov"
+    },
+    {
+      "datum": "2026-10-27",
+      "vecka": 44,
+      "dag": "Tisdag",
+      "beskrivning": "Höstlov"
+    },
+    {
+      "datum": "2026-10-28",
+      "vecka": 44,
+      "dag": "Onsdag",
+      "beskrivning": "Höstlov"
+    },
+    {
+      "datum": "2026-10-29",
+      "vecka": 44,
+      "dag": "Torsdag",
+      "beskrivning": "Höstlov"
+    },
+    {
+      "datum": "2026-10-30",
+      "vecka": 44,
+      "dag": "Fredag",
+      "beskrivning": "Höstlov"
+    },
+    {
+      "datum": "2026-12-21",
+      "vecka": 52,
+      "dag": "Måndag",
+      "beskrivning": "Jullov"
+    },
+    {
+      "datum": "2026-12-22",
+      "vecka": 52,
+      "dag": "Tisdag",
+      "beskrivning": "Jullov"
+    },
+    {
+      "datum": "2026-12-23",
+      "vecka": 52,
+      "dag": "Onsdag",
+      "beskrivning": "Jullov"
+    },
+    {
+      "datum": "2026-12-24",
+      "vecka": 52,
+      "dag": "Torsdag",
+      "beskrivning": "Jullov"
+    },
+    {
+      "datum": "2026-12-25",
+      "vecka": 52,
+      "dag": "Fredag",
+      "beskrivning": "Jullov"
+    },
+    {
+      "datum": "2026-12-26",
+      "vecka": 52,
+      "dag": "Lördag",
+      "beskrivning": "Jullov"
+    },
+    {
+      "datum": "2026-12-27",
+      "vecka": 52,
+      "dag": "Söndag",
+      "beskrivning": "Jullov"
+    },
+    {
+      "datum": "2026-12-28",
+      "vecka": 53,
+      "dag": "Måndag",
+      "beskrivning": "Jullov"
+    },
+    {
+      "datum": "2026-12-29",
+      "vecka": 53,
+      "dag": "Tisdag",
+      "beskrivning": "Jullov"
+    },
+    {
+      "datum": "2026-12-30",
+      "vecka": 53,
+      "dag": "Onsdag",
+      "beskrivning": "Jullov"
+    },
+    {
+      "datum": "2026-12-31",
+      "vecka": 53,
+      "dag": "Torsdag",
+      "beskrivning": "Jullov"
+    },
+    {
+      "datum": "2027-01-01",
+      "vecka": 53,
+      "dag": "Fredag",
+      "beskrivning": "Jullov"
+    },
+    {
+      "datum": "2027-01-02",
+      "vecka": 53,
+      "dag": "Lördag",
+      "beskrivning": "Jullov"
+    },
+    {
+      "datum": "2027-01-03",
+      "vecka": 53,
+      "dag": "Söndag",
+      "beskrivning": "Jullov"
+    },
+    {
+      "datum": "2027-01-04",
+      "vecka": 1,
+      "dag": "Måndag",
+      "beskrivning": "Jullov"
+    },
+    {
+      "datum": "2027-01-05",
+      "vecka": 1,
+      "dag": "Tisdag",
+      "beskrivning": "Jullov"
+    },
+    {
+      "datum": "2027-01-06",
+      "vecka": 1,
+      "dag": "Onsdag",
+      "beskrivning": "Jullov"
+    },
+    {
+      "datum": "2027-01-07",
+      "vecka": 1,
+      "dag": "Torsdag",
+      "beskrivning": "Jullov"
+    },
+    {
+      "datum": "2027-01-08",
+      "vecka": 1,
+      "dag": "Fredag",
+      "beskrivning": "Jullov"
+    },
+    {
+      "datum": "2027-02-22",
+      "vecka": 8,
+      "dag": "Måndag",
+      "beskrivning": "Sportlov"
+    },
+    {
+      "datum": "2027-02-23",
+      "vecka": 8,
+      "dag": "Tisdag",
+      "beskrivning": "Sportlov"
+    },
+    {
+      "datum": "2027-02-24",
+      "vecka": 8,
+      "dag": "Onsdag",
+      "beskrivning": "Sportlov"
+    },
+    {
+      "datum": "2027-02-25",
+      "vecka": 8,
+      "dag": "Torsdag",
+      "beskrivning": "Sportlov"
+    },
+    {
+      "datum": "2027-02-26",
+      "vecka": 8,
+      "dag": "Fredag",
+      "beskrivning": "Sportlov"
+    },
+    {
+      "datum": "2027-04-05",
+      "vecka": 14,
+      "dag": "Måndag",
+      "beskrivning": "Påsklov"
+    },
+    {
+      "datum": "2027-04-06",
+      "vecka": 14,
+      "dag": "Tisdag",
+      "beskrivning": "Påsklov"
+    },
+    {
+      "datum": "2027-04-07",
+      "vecka": 14,
+      "dag": "Onsdag",
+      "beskrivning": "Påsklov"
+    },
+    {
+      "datum": "2027-04-08",
+      "vecka": 14,
+      "dag": "Torsdag",
+      "beskrivning": "Påsklov"
+    },
+    {
+      "datum": "2027-04-09",
+      "vecka": 14,
+      "dag": "Fredag",
+      "beskrivning": "Påsklov"
+    },
+    {
+      "datum": "2027-05-07",
+      "vecka": 18,
+      "dag": "Fredag",
+      "beskrivning": "Lovdag"
+    }
   ],
   "helgdagar": [
-    { "datum": "2026-04-03", "vecka": 14, "dag": "Fredag", "beskrivning": "Exempelhelgdag" },
-    { "datum": "2026-04-06", "vecka": 15, "dag": "Måndag", "beskrivning": "Exempelhelgdag" },
-    { "datum": "2026-05-01", "vecka": 18, "dag": "Fredag", "beskrivning": "Exempelhelgdag" }
+    {
+      "datum": "2027-03-26",
+      "vecka": 12,
+      "dag": "Fredag",
+      "beskrivning": "Långfredagen"
+    },
+    {
+      "datum": "2027-03-29",
+      "vecka": 13,
+      "dag": "Måndag",
+      "beskrivning": "Annandag påsk"
+    },
+    {
+      "datum": "2027-05-06",
+      "vecka": 18,
+      "dag": "Torsdag",
+      "beskrivning": "Kristi himmelsfärdsdag"
+    }
   ]
 }
